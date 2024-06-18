@@ -163,7 +163,5 @@ cython_debug/
 
 # Additional
 .DS_Store
-data/input/*
-data/output/*
-data/oof/*
-exp
+data/
+exp/
