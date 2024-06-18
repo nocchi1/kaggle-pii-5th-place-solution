@@ -7,7 +7,10 @@ For detailed our solution, please refer to the [discussion](https://www.kaggle.c
 
 ## Reproducing 5th place solution
 ### 1. Data Download
-
+Use the following command to download the competition data and external datasets:
+```
+sh download.sh
+```
 ### 2. Preprocess
 
 ### 3. Train Models
