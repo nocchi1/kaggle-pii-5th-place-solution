@@ -10,4 +10,4 @@ python -m download -c pii-detection-removal-from-educational-data -p data_path -
 python -m upload -p data_path -t dataset_title # --public
 
 # Download Datasets
-kaggle datasets download zillow/zecon -p data_path --unzip
+kaggle datasets download zillow/zecon -p data_path --unzip # ---f FILE_NAME

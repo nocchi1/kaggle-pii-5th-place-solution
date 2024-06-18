@@ -26,5 +26,4 @@ if args.unzip:
     with zipfile.ZipFile(Path(dir_path) / f'{comp_name}.zip') as f:
         f.extractall(Path(dir_path))
         print('Unzip Complete!')
-        
-Path(dir_path).joinpath(f'{comp_name}.zip').unlink()
+    Path(dir_path).joinpath(f'{comp_name}.zip').unlink()
