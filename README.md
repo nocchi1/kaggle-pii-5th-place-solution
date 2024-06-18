@@ -5,8 +5,10 @@ In this competition, participants were tasked with developing machine learning m
 
 For detailed our solution, please refer to the [discussion](https://www.kaggle.com/competitions/pii-detection-removal-from-educational-data/discussion/497306) on Kaggle.
 
-## Preparations
-
-
 ## Reproducing 5th place solution
+### 1. Data Download
+
+### 2. Preprocess
+
+### 3. Train Models
 
