@@ -1,10 +1,11 @@
 #!/bin/sh
 
-cd data
-python ../src/kaggle/download.py -c pii-detection-removal-from-educational-data -p input -u
+mkdir data/input data/input/external
+
+cd data/input
+python ../../src/kaggle/download.py -c pii-detection-removal-from-educational-data -p ./ -u
 
 cd external
-
 # dataset from https://www.kaggle.com/datasets/nbroad/pii-dd-mistral-generated
 kaggle datasets download nbroad/pii-dd-mistral-generated -f mixtral-8x7b-v1.json
 unzip mixtral-8x7b-v1.json.zip
@@ -20,5 +21,4 @@ mv mpware_mixtral8x7b_v1.1-no-i-username.json mpware.json
 kaggle datasets download sujithkumarmanickam/pii-extra-data -f moredata_dataset_fixed.json
 unzip moredata_dataset_fixed.json.zip
 mv moredata_dataset_fixed.json pjma.json
-
 rm *.zip
