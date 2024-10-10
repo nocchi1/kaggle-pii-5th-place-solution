@@ -1,6 +1,5 @@
 exp: '087'
 seed: 10
-run_type: 'train'
 
 # data preprocess
 remove_prefix: true
@@ -12,14 +11,13 @@ exter_dataset:
 n_fold: 3
 use_fold: 3
 
-
 # dataset, dataloader
+add_newline_token: true
 max_length: 128
 train_stride: 96
 eval_stride: 64
 train_batch: 16
 eval_batch: 64
-add_newline_token: true
 
 # model
 model_path: 'microsoft/deberta-v3-large'

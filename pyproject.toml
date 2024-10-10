@@ -35,6 +35,7 @@ dependencies = [
     "spacy-alignments>=0.9.1",
     "nltk>=3.8.1",
     "requests==2.27.1",
+    "ruff>=0.6.9",
 ]
 readme = "README.md"
 requires-python = ">= 3.10"
@@ -55,7 +56,7 @@ packages = ["src/kaggle_the_learning_agency_lab_pii_data_detection"]
 
 [tool.ruff]
 exclude = [".git", ".mypy_cache", ".ruff_cache", ".venv", "third_party"]
-line-length = 100
+line-length = 120
 target-version = "py311"
 
 [tool.ruff.lint]

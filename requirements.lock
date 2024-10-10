@@ -435,6 +435,8 @@ rich==13.7.1
 rpds-py==0.18.1
     # via jsonschema
     # via referencing
+ruff==0.6.9
+    # via kaggle-the-learning-agency-lab-pii-data-detection
 safetensors==0.4.3
     # via transformers
 scikit-learn==1.5.0
