@@ -6,6 +6,8 @@
 #   features: []
 #   all-features: false
 #   with-sources: false
+#   generate-hashes: false
+#   universal: false
 
 -e file:.
 altair==5.3.0
@@ -16,8 +18,6 @@ antlr4-python3-runtime==4.9.3
     # via omegaconf
 anyio==4.4.0
     # via jupyter-server
-appnope==0.1.4
-    # via ipykernel
 argon2-cffi==23.1.0
     # via jupyter-server
     # via notebook
@@ -60,6 +60,8 @@ click==8.1.7
     # via typer
 cloudpathlib==0.18.1
     # via weasel
+cmake==3.30.4
+    # via triton
 comm==0.2.2
     # via ipykernel
     # via ipywidgets
@@ -93,6 +95,7 @@ filelock==3.15.1
     # via huggingface-hub
     # via torch
     # via transformers
+    # via triton
 fonttools==4.53.0
     # via matplotlib
 fqdn==1.5.1
@@ -178,7 +181,6 @@ jupyter-core==5.7.2
 jupyter-events==0.10.0
     # via jupyter-server
 jupyter-server==2.14.1
-    # via notebook
     # via notebook-shim
 jupyter-server-terminals==0.5.3
     # via jupyter-server
@@ -196,6 +198,8 @@ language-data==1.2.0
     # via langcodes
 lightgbm==4.4.0
     # via kaggle-the-learning-agency-lab-pii-data-detection
+lit==18.1.8
+    # via triton
 loguru==0.7.2
     # via kaggle-the-learning-agency-lab-pii-data-detection
 marisa-trie==1.2.0
@@ -248,7 +252,6 @@ notebook==6.5.7
     # via jupyter
 notebook-shim==0.2.4
     # via nbclassic
-    # via notebook
 numpy==1.26.4
     # via altair
     # via blis
@@ -270,6 +273,30 @@ numpy==1.26.4
     # via torchvision
     # via transformers
     # via xgboost
+nvidia-cublas-cu11==11.10.3.66
+    # via nvidia-cudnn-cu11
+    # via nvidia-cusolver-cu11
+    # via torch
+nvidia-cuda-cupti-cu11==11.7.101
+    # via torch
+nvidia-cuda-nvrtc-cu11==11.7.99
+    # via torch
+nvidia-cuda-runtime-cu11==11.7.99
+    # via torch
+nvidia-cudnn-cu11==8.5.0.96
+    # via torch
+nvidia-cufft-cu11==10.9.0.58
+    # via torch
+nvidia-curand-cu11==10.2.10.91
+    # via torch
+nvidia-cusolver-cu11==11.4.0.1
+    # via torch
+nvidia-cusparse-cu11==11.7.4.91
+    # via torch
+nvidia-nccl-cu11==2.14.3
+    # via torch
+nvidia-nvtx-cu11==11.7.91
+    # via torch
 omegaconf==2.3.0
     # via kaggle-the-learning-agency-lab-pii-data-detection
 overrides==7.7.0
@@ -426,6 +453,16 @@ send2trash==1.8.3
     # via notebook
 sentencepiece==0.2.0
     # via kaggle-the-learning-agency-lab-pii-data-detection
+setuptools==70.0.0
+    # via marisa-trie
+    # via nvidia-cublas-cu11
+    # via nvidia-cuda-cupti-cu11
+    # via nvidia-cuda-runtime-cu11
+    # via nvidia-curand-cu11
+    # via nvidia-cusparse-cu11
+    # via nvidia-nvtx-cu11
+    # via spacy
+    # via thinc
 shellingham==1.5.4
     # via typer
 six==1.16.0
@@ -487,6 +524,7 @@ torch==2.0.1
     # via kaggle-the-learning-agency-lab-pii-data-detection
     # via torchaudio
     # via torchvision
+    # via triton
 torchaudio==2.0.2
     # via kaggle-the-learning-agency-lab-pii-data-detection
 torchvision==0.15.2
@@ -523,6 +561,8 @@ traitlets==5.14.3
     # via qtconsole
 transformers==4.41.2
     # via kaggle-the-learning-agency-lab-pii-data-detection
+triton==2.0.0
+    # via torch
 typer==0.12.3
     # via spacy
     # via weasel
@@ -550,6 +590,8 @@ wasabi==1.1.3
     # via spacy
     # via thinc
     # via weasel
+watchdog==5.0.3
+    # via streamlit
 wcwidth==0.2.13
     # via prompt-toolkit
 weasel==0.4.1
@@ -561,13 +603,16 @@ webencodings==0.5.1
     # via tinycss2
 websocket-client==1.8.0
     # via jupyter-server
+wheel==0.44.0
+    # via nvidia-cublas-cu11
+    # via nvidia-cuda-cupti-cu11
+    # via nvidia-cuda-runtime-cu11
+    # via nvidia-curand-cu11
+    # via nvidia-cusparse-cu11
+    # via nvidia-nvtx-cu11
 widgetsnbextension==4.0.11
     # via ipywidgets
 wrapt==1.16.0
     # via smart-open
 xgboost==2.0.3
     # via kaggle-the-learning-agency-lab-pii-data-detection
-setuptools==70.0.0
-    # via marisa-trie
-    # via spacy
-    # via thinc

@@ -1,0 +1,11 @@
+{
+    "recommendations": [
+        "github.copilot",
+        "github.copilot-chat",
+        "ms-python.python",
+        "ms-toolsai.jupyter",
+        "charliermarsh.ruff",
+        "tamasfe.even-better-toml",
+        "yzhang.markdown-all-in-one",
+    ]
+}

@@ -37,12 +37,7 @@ dependencies = [
     "requests==2.27.1",
 ]
 readme = "README.md"
-requires-python = ">= 3.8"
-
-[[tool.rye.sources]]
-name = "torch"
-url = "https://download.pytorch.org/whl/cu117"
-type = "index"
+requires-python = ">= 3.10"
 
 [build-system]
 requires = ["hatchling"]
@@ -57,3 +52,38 @@ allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/kaggle_the_learning_agency_lab_pii_data_detection"]
+
+[tool.ruff]
+exclude = [".git", ".mypy_cache", ".ruff_cache", ".venv", "third_party"]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+fixable = ["ALL"]
+unfixable = []
+select = [
+    "A",  # flake8-builtin
+    "B",  # flake8-bugbear
+    "E",  # pycodestyle error
+    "F",  # Pyflakes
+    "I",  # isort
+    "N",  # pep8-naming
+    "W",  # pycodestyle warning
+    "PL",  # Pylint
+    "UP",  # pyupgrade
+]
+ignore = [
+    "B905",  # Zip-without-explicit-strict
+    "E501",  # Line too long
+    "F403",  # Unable to detect undefined names
+    "N812",  # Lowercase imported as non-lowercase
+    "N999",  # Invalid module name
+    "PLR0912",  # Too many branches
+    "PLR0913",  # Too many arguments in function definition
+    "PLR2004",  # Magic value used in comparison
+    "F401", # Unused-import
+]
+
+[tool.ruff.format]
+quote-style = "double"
+line-ending = "auto"
