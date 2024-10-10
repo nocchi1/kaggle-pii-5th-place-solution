@@ -1,0 +1,5 @@
+device: "cuda"
+
+input_path: ${path:"../data/input"}
+exter_path: ${path:"../data/input/external"}
+output_path: ${path:"../data/output"}

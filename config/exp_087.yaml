@@ -1,0 +1,65 @@
+exp: '087'
+seed: 10
+run_type: 'train'
+
+# data preprocess
+remove_prefix: true
+exter_dataset:
+  - ['nicholas', true]
+  - ['mpware', false]
+  - ['pjma', false]
+
+n_fold: 3
+use_fold: 3
+
+
+# dataset, dataloader
+max_length: 128
+train_stride: 96
+eval_stride: 64
+train_batch: 16
+eval_batch: 64
+add_newline_token: true
+
+# model
+model_path: 'microsoft/deberta-v3-large'
+class_num: 2  # Replace with actual length of TARGET2IDX_WTO_BIO or TARGET2IDX_WITH_BIO
+with_gru: false
+use_hidden_states: 2
+dropout: 0.10
+hidden_dropout: 0.10
+attention_dropout: 0.10
+reinit_layer_num: 0
+freeze_layer_num: 0
+
+# optimizer
+optimizer_type: 'AdamW'
+pretrained_lr: 1e-6
+head_lr: 1e-4
+weight_decay: 0.01
+betas: [0.9, 0.999]
+
+# scheduler
+T_0: 1
+T_mult: 1
+min_lr: 1e-9
+warmup_steps: 100
+gamma: 1.0
+
+# training
+device: 'cuda'
+pos_weight_ratio: 10
+epochs: 4
+eval_interval: 1000
+accumulation_steps: 2
+negative_th: 0.660
+ema_decay: 0.999
+ema_warmup_gamma: 1
+ema_warmup_power: 0.75
+
+# additional training
+add_train: true
+add_epochs: 2
+
+# full training
+full_train: true
