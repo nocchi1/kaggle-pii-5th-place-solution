@@ -1,5 +1,6 @@
 exp: '087'
 seed: 10
+task_type: 'detect'
 
 # data preprocess
 remove_prefix: true
@@ -21,8 +22,8 @@ eval_batch: 64
 
 # model
 model_path: 'microsoft/deberta-v3-large'
-class_num: 2  # Replace with actual length of TARGET2IDX_WTO_BIO or TARGET2IDX_WITH_BIO
-with_gru: false
+class_num: 8 # 8 or 13
+lstm_type: 'none'
 use_hidden_states: 2
 dropout: 0.10
 hidden_dropout: 0.10
@@ -38,10 +39,11 @@ weight_decay: 0.01
 betas: [0.9, 0.999]
 
 # scheduler
-T_0: 1
-T_mult: 1
+scheduler_type: 'cosine_custom'
+first_cycle_epochs: 1
+cycle_factor: 1
+num_warmup_steps: 100
 min_lr: 1e-9
-warmup_steps: 100
 gamma: 1.0
 
 # training
