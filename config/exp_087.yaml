@@ -31,6 +31,11 @@ attention_dropout: 0.10
 reinit_layer_num: 0
 freeze_layer_num: 0
 
+# loss
+smooth_type: 'none'
+smooth_ratio: 0.05
+smooth_pair: 0.05
+
 # optimizer
 optimizer_type: 'AdamW'
 pretrained_lr: 1e-6

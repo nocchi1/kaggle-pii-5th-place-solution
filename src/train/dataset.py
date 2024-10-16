@@ -244,3 +244,15 @@ class DetectRandomDataset(Dataset):
             for p_idx in pii_index:
                 pii_locs.append([i, ids, p_idx])
         return pii_locs
+
+    def drop_first_only_data(self):
+        """
+        Remove the dataset used only in the first phase when performing additional training
+        """
+        assert self.data_type == "train"
+        mask = self.overlap_additional
+        self.input_ids = list(itertools.compress(self.input_ids, mask))
+        self.attention_mask = list(itertools.compress(self.attention_mask, mask))
+        self.positions_ratio = list(itertools.compress(self.positions_ratio, mask))
+        self.positions_abs = list(itertools.compress(self.positions_abs, mask))
+        self.token_labels = list(itertools.compress(self.token_labels, mask))
