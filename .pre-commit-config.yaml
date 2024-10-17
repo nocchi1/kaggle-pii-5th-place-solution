@@ -6,7 +6,7 @@ repos:
         name: ruff-lint
         language: python
         types_or: [python]
-        entry: ruff check . --fix
+        entry: ruff check . --fix-only
 
       - id: ruff-format
         name: ruff-format

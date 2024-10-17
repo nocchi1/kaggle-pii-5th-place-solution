@@ -1,9 +1,21 @@
+import json
 import re
 import statistics
+from pathlib import Path
 
 import numpy as np
+import polars as pl
+from omegaconf import DictConfig
 
-from src.utils.constant import TARGET2IDX_WITH_BIO, TARGET2IDX_WTO_BIO
+from src.utils.constant import IDX2TARGET_WTO_BIO, TARGET2IDX_WITH_BIO, TARGET2IDX_WTO_BIO
+
+
+def load_json_data(file_path: Path, debug: bool = False) -> list[dict]:
+    with open(file_path) as f:
+        data = json.load(f)
+    if debug:
+        data = data[:100]
+    return data
 
 
 def remove_target_prefix(data: list[dict]) -> list[dict]:
@@ -124,3 +136,199 @@ def mapping_index_char2token_overlapped(
                 token_idx[i] = statistics.mode(map_idx)
         token_indices.append(token_idx)
     return token_indices
+
+
+def get_char2org_df(
+    doc_ids: list[int],
+    full_text: list[str],
+    org_tokens: list[list[str]],
+    whitespaces: list[list[bool]],
+):
+    """
+    文字とオリジナルトークンのマッピングをdfとして取得する
+    """
+    char2org_df = []
+    for doc_id, text, org_token, whitespace in zip(doc_ids, full_text, org_tokens, whitespaces):
+        char2org_map = np.zeros(len(text), dtype=np.int32)
+
+        start_idx = 0
+        for idx, (token, space) in enumerate(zip(org_token, whitespace)):
+            char2org_map[start_idx : start_idx + len(token)] = idx
+            start_idx += len(token)
+            if space:
+                char2org_map[start_idx] = -1
+                start_idx += 1
+
+        char2org_map = np.concatenate(
+            [
+                np.array([doc_id] * len(text)).reshape(-1, 1),
+                np.array(list(range(len(text)))).reshape(-1, 1),
+                char2org_map.reshape(-1, 1),
+            ],
+            axis=1,
+        )
+        char2org_df.append(char2org_map)
+
+    char2org_df = np.concatenate(char2org_df, axis=0)
+    char2org_df = pl.DataFrame(char2org_df, schema=["document", "char_idx", "token_idx"]).with_columns(
+        document=pl.col("document").cast(pl.Int32),
+        index=pl.col("char_idx").cast(pl.Int32),
+    )
+    return char2org_df
+
+
+def get_char_pred_df(
+    preds: np.ndarray,
+    overlap_doc_ids: np.ndarray,
+    offset_mappings: list[list[tuple[int, int]]],
+    class_num: int,
+):
+    """
+    文字単位に集約した予測値を取得する
+    """
+    doc_ids, char_indices, char_preds = [], [], []
+    for pred, doc_id, offset in zip(preds, overlap_doc_ids, offset_mappings):
+        for i in range(len(offset)):
+            start, end = offset[i]
+            if start == 0 and end == 0:
+                continue
+
+            doc_ids.extend([doc_id] * len(range(start, end)))
+            char_indices.extend(list(range(start, end)))
+            char_preds.extend([pred[i]] * len(range(start, end)))
+
+    char_preds = np.stack(char_preds, axis=0)  # (char_len, class_num)
+    char_pred_df = pl.DataFrame(char_preds, schema=[f"pred_{i}" for i in range(class_num)])
+    char_pred_df = char_pred_df.with_columns(
+        document=pl.Series(doc_ids),
+        char_idx=pl.Series(char_indices),
+    )
+    char_pred_df = (
+        char_pred_df.group_by("document", "char_idx")
+        .agg([pl.col(f"pred_{i}").mean() for i in range(class_num)])
+        .sort("document", "char_idx")
+        .with_columns(document=pl.col("document").cast(pl.Int32), char_idx=pl.col("char_idx").cast(pl.Int32))
+    )
+    return char_pred_df
+
+
+def get_pred_df(oof_df: pl.DataFrame, class_num: int, negative_th: float) -> pl.DataFrame:
+    """
+    全クラスの確率のテーブルから、最も確率の高いクラスを予測として取得する
+    """
+    pred_df = oof_df.with_columns(
+        positive_pred=np.argmax(oof_df.select([f"pred_{i}" for i in range(1, class_num)]).to_numpy(), axis=1) + 1,
+        positive_prob=np.max(oof_df.select([f"pred_{i}" for i in range(1, class_num)]).to_numpy(), axis=1),
+        negative_prob=pl.col("pred_0"),
+    )
+    pred_df = pred_df.select(
+        [
+            pl.col("document"),
+            pl.col("token_index"),
+            (
+                pl.when(pl.col("negative_prob") > negative_th)
+                .then(pl.col("negative_prob"))
+                .otherwise(pl.col("positive_prob"))
+                .alias("prob")
+            ),
+            (
+                pl.when(pl.col("negative_prob") > negative_th)
+                .then(pl.lit(0).cast(pl.Int8))
+                .otherwise(pl.col("positive_pred").cast(pl.Int8))
+                .alias("pred")
+            ),
+        ]
+    )
+    return pred_df.sort("document", "token_index")
+
+
+def restore_prefix(config: DictConfig, pred_df: pl.DataFrame):
+    """
+    Restore Prefix, e.g. NAME_STUDENT -> B-NAME_STUDENT
+    """
+    # まずスペースに対しての予測を"O"に変更する -> これをしないと精度が著しく下がる
+    org_token_df = get_original_token_df(config, pred_df["document"].unique().to_list())
+    pred_df = pred_df.join(org_token_df, on=["document", "token_index"], how="left")
+    pred_df = pred_df.with_columns(
+        pred=(
+            pl.when(pl.col("token").map_elements(lambda x: re.sub(r"[ \xa0]+", " ", x)) == " ")
+            .then(pl.lit(0))
+            .otherwise(pl.col("pred"))
+        )
+    )
+    pred_df = pred_df.drop(["token", "space"])
+
+    # B, Iタグを割り当てる
+    pred_df = pred_df.with_columns(org_pred=pl.col("pred").replace(IDX2TARGET_WTO_BIO, default="O"))
+    pred_df = pred_df.with_columns(pred_diff=pl.col("pred").diff().over(["document"]).fill_null(-1))
+    pred_df = pred_df.with_columns(
+        prefix=(
+            pl.when((pl.col("pred") != 0) & (pl.col("pred_diff") != 0))
+            .then(pl.lit("B-"))
+            .when((pl.col("pred") != 0) & (pl.col("pred_diff") == 0))
+            .then(pl.lit("I-"))
+            .otherwise(pl.lit(""))
+        )
+    )
+    pred_df = pred_df.with_columns(
+        pred=(
+            pl.concat_str([pl.col("prefix"), pl.col("org_pred")])
+            .replace(TARGET2IDX_WITH_BIO, default="0")
+            .cast(pl.Int64)
+        )
+    )
+    pred_df = pred_df.drop(["org_pred", "pred_diff", "prefix"])
+    return pred_df
+
+
+def get_original_token_df(config: DictConfig, document_ids: list[int]) -> pl.DataFrame:
+    """
+    オリジナルのデータに関するdfを取得する
+
+    Returns:
+        pl.DataFrame: [document, token_index, token, space]
+    """
+    train_data = load_json_data(config.input_path / "train.json")
+    org_token_df = []
+    for data in train_data:
+        doc_id = data["document"]
+        org_tokens = data["tokens"]
+        spaces = data["trailing_whitespace"]
+
+        if doc_id in document_ids:
+            org_token_df.append(
+                pl.DataFrame(
+                    dict(
+                        document=[doc_id] * len(org_tokens),
+                        token_index=list(range(len(org_tokens))),
+                        token=org_tokens,
+                        space=spaces,
+                    ),
+                )
+            )
+    org_token_df = pl.concat(org_token_df)
+    return org_token_df
+
+
+def get_truth_df(config, document_ids: list[int], convert_idx: bool) -> pl.DataFrame:  # indexへの変換が必要か
+    """
+    ラベルを元のトークンインデックスと共にデータフレームで取得
+
+    Returns:
+        pl.DataFrame: [document, token_index, label]
+    """
+    train_data = load_json_data(config.input_path / "train.json")
+    truth_df = []
+    for data in train_data:
+        doc_id = data["document"]
+        labels = data["labels"]
+
+        if doc_id in document_ids:
+            truth_df.append(
+                pl.DataFrame(dict(document=[doc_id] * len(labels), token_index=list(range(len(labels))), label=labels))
+            )
+
+    truth_df = pl.concat(truth_df)
+    if convert_idx:
+        truth_df = truth_df.with_columns(label=pl.col("label").replace(TARGET2IDX_WITH_BIO, default=-1))
+    return truth_df

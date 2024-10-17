@@ -13,9 +13,7 @@ def visualize_pii_text(tokens: list[str], spaces: list[int], labels: list[str]):
     print(text)
 
 
-def visualize_pii_pred_text(
-    tokens: list[str], spaces: list[int], labels: list[str], preds: list[str]
-):
+def visualize_pii_pred_text(tokens: list[str], spaces: list[int], labels: list[str], preds: list[str]):
     text = ""
     for token, space, label, pred in zip(tokens, spaces, labels, preds):
         if label == pred and label != "O":

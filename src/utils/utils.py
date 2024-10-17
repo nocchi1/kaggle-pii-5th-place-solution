@@ -1,7 +1,7 @@
 import os
 import random
 import re
-from pathlib import PosixPath
+from pathlib import Path
 
 import numpy as np
 import polars as pl
@@ -19,7 +19,7 @@ def seed_everything(seed):
     torch.backends.cudnn.benchmark = False
 
 
-def convert_csv_to_parquet(file_path: PosixPath, delete_csv: bool = False):
+def convert_csv_to_parquet(file_path: Path, delete_csv: bool = False):
     parent_path = file_path.parent
     file_name = file_path.stem
     df = pl.read_csv(file_path)

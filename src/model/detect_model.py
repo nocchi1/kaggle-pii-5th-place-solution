@@ -102,8 +102,8 @@ class DetectModel(nn.Module):
         for param in self.backbone.parameters():
             param.requires_grad = False
 
-        for i in range(reinit_layer_num):
-            for params in self.backbone.encoder.layer[i - 1].parameters():
+        for i in range(1, reinit_layer_num + 1):
+            for params in self.backbone.encoder.layer[-i].parameters():
                 params.requires_grad = True
 
     # BackboneのFreezeを解除する, 元からFreezeに指定した層はFreezeのまま
@@ -111,10 +111,4 @@ class DetectModel(nn.Module):
         for param in self.backbone.parameters():
             param.requires_grad = True
 
-        for i in range(freeze_layer_num):
-            if i == 0:
-                for params in self.backbone.embeddings.parameters():
-                    params.requires_grad = False
-            else:
-                for params in self.backbone.encoder.layer[i - 1].parameters():
-                    params.requires_grad = False
+        self.freeze_layers(freeze_layer_num)

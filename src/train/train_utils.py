@@ -33,9 +33,7 @@ class CollateFn:
         else:
             input_ids, attention_mask, positions_ratio, positions_abs = zip(*batch)
 
-        input_ids = pad_sequence(
-            input_ids, batch_first=True, padding_value=self.tokenizer.pad_token_id
-        )
+        input_ids = pad_sequence(input_ids, batch_first=True, padding_value=self.tokenizer.pad_token_id)
         attention_mask = pad_sequence(attention_mask, batch_first=True, padding_value=0)
         positions_ratio = pad_sequence(positions_ratio, batch_first=True, padding_value=0)
         positions_abs = pad_sequence(positions_abs, batch_first=True, padding_value=0)

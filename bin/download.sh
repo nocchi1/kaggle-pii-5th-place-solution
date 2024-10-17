@@ -33,4 +33,3 @@ mv mixtral-8x7b-v1.json nicholas.json
 mv mpware_mixtral8x7b_v1.1-no-i-username.json mpware.json
 mv moredata_dataset_fixed.json pjma.json
 cd ../../..
-

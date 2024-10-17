@@ -21,9 +21,7 @@ class TimeUtil:
         sign = "+" if delta >= 0 else "-"
         delta = math.fabs(delta)
         if logger is not None:
-            logger.info(
-                f"[{name}] done [{m1:.1f}GB({p1:.1f}%)({sign}{delta:.3f}GB)] {t1 - t0:.4f} s"
-            )
+            logger.info(f"[{name}] done [{m1:.1f}GB({p1:.1f}%)({sign}{delta:.3f}GB)] {t1 - t0:.4f} s")
         else:
             print(f"[{name}] done [{m1:.1f}GB({p1:.1f}%)({sign}{delta:.3f}GB)] {t1 - t0:.4f} s")
 

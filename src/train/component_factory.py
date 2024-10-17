@@ -2,6 +2,10 @@ from omegaconf import DictConfig
 from torch import nn
 from torch.optim.optimizer import Optimizer
 
+from src.model.detect_model import DetectModel
+
+# from src.model.classify_model import ClassifyModel
+from src.train.loss import OnlineSmoothingCELoss, SmoothingCELoss
 from src.train.optimizer import get_optimizer
 from src.train.scheduler import get_scheduler
 
@@ -13,7 +17,8 @@ class ComponentFactory:
         if config.task_type == "detect":
             model = DetectModel(config)
         elif config.task_type == "classify":
-            model = ClassifyModel()
+            pass
+            # model = ClassifyModel(config)
 
         if config.reinit_layer_num > 0:
             model.reinit_layers(config.reinit_layer_num)
@@ -25,13 +30,14 @@ class ComponentFactory:
     @staticmethod
     def get_loss(config: DictConfig):
         if config.task_type == "detect":
+            class_weight = [1] + [config.positive_class_weight] * (config.class_num - 1)
             if config.smooth_type == "online":
-                loss_fn = None
+                loss_fn = OnlineSmoothingCELoss(config, class_weight=class_weight)
             else:
-                loss_fn = SmoothingCELoss(config, weight=config.loss_class_weight)
-
+                loss_fn = SmoothingCELoss(config, class_weight=class_weight)
         elif config.task_type == "classify":
-            loss_fn = WeightedBCELoss()
+            # loss_fn = WeightedBCELoss()
+            pass
         return loss_fn
 
     @staticmethod
@@ -48,7 +54,7 @@ class ComponentFactory:
 
     @staticmethod
     def get_scheduler(config: DictConfig, optimizer: Optimizer, steps_per_epoch: int):
-        total_steps = config.epochs * steps_per_epoch
+        total_steps = (config.epochs - 1) * steps_per_epoch  # 1epoch目はlrを減衰させない
         if config.scheduler_type == "linear":
             scheduler_args = {
                 "num_warmup_steps": config.num_warmup_steps,
