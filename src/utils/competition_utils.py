@@ -170,10 +170,7 @@ def get_char2org_df(
         char2org_df.append(char2org_map)
 
     char2org_df = np.concatenate(char2org_df, axis=0)
-    char2org_df = pl.DataFrame(char2org_df, schema=["document", "char_idx", "token_idx"]).with_columns(
-        document=pl.col("document").cast(pl.Int32),
-        index=pl.col("char_idx").cast(pl.Int32),
-    )
+    char2org_df = pl.DataFrame(char2org_df, schema={"document": pl.Int32, "char_idx": pl.Int32, "token_idx": pl.Int32})
     return char2org_df
 
 
@@ -200,14 +197,13 @@ def get_char_pred_df(
     char_preds = np.stack(char_preds, axis=0)  # (char_len, class_num)
     char_pred_df = pl.DataFrame(char_preds, schema=[f"pred_{i}" for i in range(class_num)])
     char_pred_df = char_pred_df.with_columns(
-        document=pl.Series(doc_ids),
-        char_idx=pl.Series(char_indices),
+        document=pl.Series(doc_ids).cast(pl.Int32),
+        char_idx=pl.Series(char_indices).cast(pl.Int32),
     )
     char_pred_df = (
         char_pred_df.group_by("document", "char_idx")
         .agg([pl.col(f"pred_{i}").mean() for i in range(class_num)])
         .sort("document", "char_idx")
-        .with_columns(document=pl.col("document").cast(pl.Int32), char_idx=pl.col("char_idx").cast(pl.Int32))
     )
     return char_pred_df
 
@@ -224,7 +220,7 @@ def get_pred_df(oof_df: pl.DataFrame, class_num: int, negative_th: float) -> pl.
     pred_df = pred_df.select(
         [
             pl.col("document"),
-            pl.col("token_index"),
+            pl.col("token_idx"),
             (
                 pl.when(pl.col("negative_prob") > negative_th)
                 .then(pl.col("negative_prob"))
@@ -239,7 +235,7 @@ def get_pred_df(oof_df: pl.DataFrame, class_num: int, negative_th: float) -> pl.
             ),
         ]
     )
-    return pred_df.sort("document", "token_index")
+    return pred_df.sort("document", "token_idx")
 
 
 def restore_prefix(config: DictConfig, pred_df: pl.DataFrame):
@@ -248,7 +244,7 @@ def restore_prefix(config: DictConfig, pred_df: pl.DataFrame):
     """
     # まずスペースに対しての予測を"O"に変更する -> これをしないと精度が著しく下がる
     org_token_df = get_original_token_df(config, pred_df["document"].unique().to_list())
-    pred_df = pred_df.join(org_token_df, on=["document", "token_index"], how="left")
+    pred_df = pred_df.join(org_token_df, on=["document", "token_idx"], how="left")
     pred_df = pred_df.with_columns(
         pred=(
             pl.when(pl.col("token").map_elements(lambda x: re.sub(r"[ \xa0]+", " ", x)) == " ")
@@ -286,7 +282,7 @@ def get_original_token_df(config: DictConfig, document_ids: list[int]) -> pl.Dat
     オリジナルのデータに関するdfを取得する
 
     Returns:
-        pl.DataFrame: [document, token_index, token, space]
+        pl.DataFrame: [document, token_idx, token, space]
     """
     train_data = load_json_data(config.input_path / "train.json")
     org_token_df = []
@@ -299,8 +295,8 @@ def get_original_token_df(config: DictConfig, document_ids: list[int]) -> pl.Dat
             org_token_df.append(
                 pl.DataFrame(
                     dict(
-                        document=[doc_id] * len(org_tokens),
-                        token_index=list(range(len(org_tokens))),
+                        document=pl.Series([doc_id] * len(org_tokens)).cast(pl.Int32),
+                        token_idx=pl.Series(list(range(len(org_tokens)))).cast(pl.Int32),
                         token=org_tokens,
                         space=spaces,
                     ),
@@ -310,12 +306,12 @@ def get_original_token_df(config: DictConfig, document_ids: list[int]) -> pl.Dat
     return org_token_df
 
 
-def get_truth_df(config, document_ids: list[int], convert_idx: bool) -> pl.DataFrame:  # indexへの変換が必要か
+def get_truth_df(config, document_ids: list[int], convert_idx: bool) -> pl.DataFrame:
     """
     ラベルを元のトークンインデックスと共にデータフレームで取得
 
     Returns:
-        pl.DataFrame: [document, token_index, label]
+        pl.DataFrame: [document, token_idx, label]
     """
     train_data = load_json_data(config.input_path / "train.json")
     truth_df = []
@@ -325,7 +321,13 @@ def get_truth_df(config, document_ids: list[int], convert_idx: bool) -> pl.DataF
 
         if doc_id in document_ids:
             truth_df.append(
-                pl.DataFrame(dict(document=[doc_id] * len(labels), token_index=list(range(len(labels))), label=labels))
+                pl.DataFrame(
+                    dict(
+                        document=pl.Series([doc_id] * len(labels)).cast(pl.Int32),
+                        token_idx=pl.Series(list(range(len(labels)))).cast(pl.Int32),
+                        label=labels,
+                    )
+                )
             )
 
     truth_df = pl.concat(truth_df)

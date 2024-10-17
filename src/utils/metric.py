@@ -1,5 +1,3 @@
-from typing import Dict, List
-
 import numpy as np
 import polars as pl
 from tqdm import tqdm
@@ -20,7 +18,7 @@ def evaluate_metric(
     pred_df: pl.DataFrame,
     truth_df: pl.DataFrame,
 ) -> float:
-    truth_df = truth_df.join(pred_df, on=["document", "token_index"], how="left")
+    truth_df = truth_df.join(pred_df, on=["document", "token_idx"], how="left")
     truth_df = truth_df.with_columns(pred=pl.col("pred").fill_null(0))
 
     tp = len(truth_df.filter((pl.col("label") != 0) & (pl.col("label") == pl.col("pred"))))
@@ -64,7 +62,7 @@ def evaluate_metric(
 #     )
 #     # Truthを取得して結合
 #     truth_df = get_truth_df(config, oof_df["document"].unique().to_list(), is_label_idx=True)
-#     pred_df = pred_df.join(truth_df, on=["document", "token_index"], how="left")
+#     pred_df = pred_df.join(truth_df, on=["document", "token_idx"], how="left")
 #     # 各pii_typeごとにnegative thresholdを算出
 #     best_th_dict = {}
 #     lower_th, upper_th = 0.00, 1.00
