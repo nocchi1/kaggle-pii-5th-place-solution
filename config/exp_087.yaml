@@ -1,6 +1,8 @@
 exp: "087"
+debug: false
 seed: 10
 task_type: "detect"
+device: "cuda"
 
 # data preprocess
 remove_prefix: true
@@ -32,7 +34,7 @@ reinit_layer_num: 0
 freeze_layer_num: 0
 
 # loss
-smooth_type: "none"
+smooth_type: "online"
 smooth_ratio: 0.05
 smooth_pair: 0.05
 positive_class_weight: 10
@@ -46,9 +48,9 @@ betas: [0.9, 0.999]
 
 # scheduler
 scheduler_type: "cosine_custom"
-first_cycle_epochs: 1
+first_cycle_epochs: 4
 cycle_factor: 1
-num_warmup_steps: 100
+num_warmup_steps: 0
 min_lr: 1e-9
 gamma: 1.0
 
@@ -57,7 +59,7 @@ epochs: 4
 accumulation_steps: 2
 eval_steps: 1000
 negative_th: 0.660
-device: "cuda"
+negative_th_method: "overall"
 amp: true
 ema: true
 ema_decay: 0.999
@@ -65,7 +67,8 @@ ema_update_after_step: 8000
 
 # additional training
 add_train: true
-add_epochs: 2
+add_epochs: 4
+add_first_cycle_epochs: 4
 
 # full training
 full_train: true

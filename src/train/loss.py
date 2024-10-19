@@ -25,7 +25,7 @@ class SmoothingCELoss(nn.Module):
         super().__init__()
         if class_weight is not None:
             class_weight = torch.tensor(class_weight, dtype=torch.float, device=config.device)
-        self.loss = nn.CrossEntropyLoss(weight=class_weight)
+        self.loss_fn = nn.CrossEntropyLoss(weight=class_weight)
         self.device = config.device
 
         self.class_num = config.class_num
@@ -45,7 +45,7 @@ class SmoothingCELoss(nn.Module):
         y_true = y_true[valid_idx]
 
         y_true = self.get_soft_label(y_true)
-        return self.loss(y_pred, y_true)
+        return self.loss_fn(y_pred, y_true)
 
     def get_soft_label(self, y_true: torch.Tensor):
         if self.smooth_type in ["normal", "weighted"]:
@@ -75,22 +75,23 @@ class SmoothingCELoss(nn.Module):
 
 
 class OnlineSmoothingCELoss(nn.Module):
-    def __init__(self, config: DictConfig, class_weight: list[float] | None = None):
+    def __init__(self, config: DictConfig, alpha: float = 0.50, class_weight: list[float] | None = None):
         super().__init__()
         class_weight = torch.tensor(class_weight, dtype=torch.float, device=config.device)
-        self.loss = nn.CrossEntropyLoss(weight=class_weight)
+        self.loss_fn = nn.CrossEntropyLoss(weight=class_weight)
         self.device = config.device
 
-        self.class_num = config.num_classes
+        self.class_num = config.class_num
+        self.alpha = alpha
         self.smooth_ratio = config.smooth_ratio
 
-        self.stats_matrix = torch.zeros((config.num_classes, config.num_classes), device=config.device)
-        self.counter = torch.zeros(config.num_classes, device=config.device)
+        self.stats_matrix = torch.zeros((config.class_num, config.class_num), device=config.device)
+        self.counter = torch.zeros(config.class_num, device=config.device)
 
         # 最初は通常のLabel Smoothing
         self.soft_matrix = (
-            torch.eye(config.num_classes, device=config.device) * (1 - self.smooth_ratio)
-            + self.smooth_ratio / config.num_classes
+            torch.eye(config.class_num, device=config.device) * (1 - self.smooth_ratio)
+            + self.smooth_ratio / config.class_num
         )
 
     def forward(self, y_pred: torch.Tensor, y_true: torch.Tensor):
@@ -103,8 +104,7 @@ class OnlineSmoothingCELoss(nn.Module):
         y_true = y_true[valid_idx]
 
         y_true = self.get_soft_label(y_true)
-        loss = self.loss_fn(y_pred, y_true)
-        return loss
+        return self.loss_fn(y_pred, y_true)
 
     def get_soft_label(self, y_true: torch.Tensor):
         return self.soft_matrix[y_true]
@@ -113,20 +113,21 @@ class OnlineSmoothingCELoss(nn.Module):
         y_pred_class = torch.argmax(y_pred, dim=-1)
         for i in range(y_pred.size(0)):
             if y_pred_class[i] == y_true[i]:
-                self.stats_matrix[y_true[i]] += y_pred[i]
+                self.stats_matrix[y_true[i]] += F.softmax(y_pred[i], dim=-1)
                 self.counter[y_true[i]] += 1
 
     def update_soft_matrix(self):
-        # 正解が1つもないケースを考える
         soft_matrix = torch.zeros_like(self.stats_matrix)
         for i in range(self.class_num):
             if self.counter[i] > 0:
-                soft_matrix[i] = self.stats_matrix[i] / self.counter[i]
+                hard_label = torch.eye(self.class_num, device=self.device)[i]
+                soft_matrix[i] = hard_label * self.alpha + (self.stats_matrix[i] / self.counter[i]) * (1 - self.alpha)
             else:
                 # soft_matrix[i] = torch.ones_like(soft_matrix[i]) / self.class_num # 論文の実装ではこちらが使われている
                 soft_label = torch.eye(self.class_num, device=self.device)[i]
                 soft_label = soft_label * (1 - self.smooth_ratio) + self.smooth_ratio / self.class_num
                 soft_matrix[i] = soft_label
-        self.soft_matrix = soft_matrix
+
+        self.soft_matrix = soft_matrix.detach()
         self.stats_matrix = torch.zeros((self.class_num, self.class_num)).to(self.device)
         self.counter = torch.zeros(self.class_num).to(self.device)

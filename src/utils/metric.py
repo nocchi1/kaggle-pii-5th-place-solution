@@ -1,6 +1,6 @@
 import numpy as np
 import polars as pl
-from tqdm import tqdm
+from omegaconf import DictConfig
 
 from src.utils.competition_utils import get_pred_df, get_truth_df, restore_prefix
 
@@ -18,7 +18,7 @@ def evaluate_metric(
     pred_df: pl.DataFrame,
     truth_df: pl.DataFrame,
 ) -> float:
-    truth_df = truth_df.join(pred_df, on=["document", "token_idx"], how="left")
+    truth_df = truth_df.join(pred_df, on=["document", "token_idx"], how="left", coalesce=True)
     truth_df = truth_df.with_columns(pred=pl.col("pred").fill_null(0))
 
     tp = len(truth_df.filter((pl.col("label") != 0) & (pl.col("label") == pl.col("pred"))))
@@ -29,71 +29,73 @@ def evaluate_metric(
     return score
 
 
-# def get_best_negative_threshold(config, oof_df: pl.DataFrame):
-#     truth_df = get_truth_df(config, oof_df["document"].unique().to_list(), is_label_idx=True)
-#     best_score = 0
-#     lower_th, upper_th = 0.20, 1.00
-#     for th in tqdm(np.arange(lower_th, upper_th, 0.01)):
-#         pred_df = get_pred_df(oof_df, negative_th=th)
-#         if config.remove_prefix:
-#             pred_df = restore_prefix(config, pred_df)
-#         score = evaluate_metric(pred_df, truth_df)
-#         if score > best_score:
-#             best_score = score
-#             best_th = th
-#     return best_score, best_th
+def get_best_negative_threshold(config: DictConfig, oof_df: pl.DataFrame, stride: float = 0.025):
+    truth_df = get_truth_df(config, oof_df["document"].unique().to_list(), convert_idx=True)
+    best_score = 0
+    best_th = None
+
+    min_th, max_th = 0.10, 0.90
+    for th in np.arange(min_th, max_th, stride):
+        pred_df = get_pred_df(oof_df, class_num=config.class_num, negative_th=th)
+        if config.remove_prefix:
+            pred_df = restore_prefix(config, pred_df)
+
+        score = evaluate_metric(pred_df, truth_df)
+        if score > best_score:
+            best_score = score
+            best_th = th
+    return best_score, best_th
 
 
-# def get_best_negative_individual_threshold(
-#     config, oof_df: pl.DataFrame
-# ) -> dict[int, float]:  # ここのpii_typeごとのthresholdを返す
-#     # 最も確率の高いpositiveクラスを算出
-#     pred_df = oof_df.with_columns(
-#         positive_pred=np.argmax(
-#             oof_df.select([col for col in oof_df.columns if "pred" in col and "pred_0" != col]).to_numpy(),
-#             axis=1,
-#         )
-#         + 1,
-#         positive_prob=np.max(
-#             oof_df.select([col for col in oof_df.columns if "pred" in col and "pred_0" != col]).to_numpy(),
-#             axis=1,
-#         ),
-#         negative_prob=pl.col("pred_0"),
-#     )
-#     # Truthを取得して結合
-#     truth_df = get_truth_df(config, oof_df["document"].unique().to_list(), is_label_idx=True)
-#     pred_df = pred_df.join(truth_df, on=["document", "token_idx"], how="left")
-#     # 各pii_typeごとにnegative thresholdを算出
-#     best_th_dict = {}
-#     lower_th, upper_th = 0.00, 1.00
-#     for pii_type, pii_pred_df in tqdm(pred_df.group_by(["positive_pred"]), total=pred_df["positive_pred"].n_unique()):
-#         best_score = 0
-#         for th in tqdm(np.arange(lower_th, upper_th, 0.01)):
-#             pii_pred_df = pii_pred_df.with_columns(
-#                 prob=(
-#                     pl.when(pl.col("negative_prob") > th)
-#                     .then(pl.col("negative_prob"))
-#                     .otherwise(pl.col("positive_prob"))
-#                 ).alias("prob"),
-#                 pred=(
-#                     pl.when(pl.col("negative_prob") > th)
-#                     .then(pl.lit(0).cast(pl.Int64))
-#                     .otherwise(pl.col("positive_pred"))
-#                 ).alias("pred"),
-#             )
-#             # 後で共通化する
-#             tp = pii_pred_df.filter((pl.col("label") != 0) & (pl.col("label") == pl.col("pred"))).shape[0]
-#             fp = pii_pred_df.filter((pl.col("label") == 0) & (pl.col("pred") != 0)).shape[0]
-#             fn = pii_pred_df.filter((pl.col("label") != 0) & (pl.col("pred") == 0)).shape[0]
-#             fp_fn = pii_pred_df.filter(
-#                 (pl.col("label") != 0) & (pl.col("pred") != 0) & (pl.col("label") != pl.col("pred"))
-#             ).shape[0]
-#             score = calculate_fbeta(tp, fp + fp_fn, fn + fp_fn)
-#             if score > best_score:
-#                 best_score = score
-#                 best_th = th
-#         best_th_dict[pii_type[0]] = best_th
-#     return best_th_dict
+def get_best_negative_threshold_individual(
+    config: DictConfig, oof_df: pl.DataFrame
+):  # ここのpii_typeごとのthresholdを返す
+    # 最も確率の高いpositiveクラスを算出
+    pred_df = oof_df.with_columns(
+        positive_pred=(
+            pl.Series(
+                np.argmax(oof_df.select([f"pred_{i}" for i in range(1, config.class_num)]).to_numpy(), axis=1) + 1
+            )
+        ),
+        positive_prob=pl.Series(
+            pl.Series(np.max(oof_df.select([f"pred_{i}" for i in range(1, config.class_num)]).to_numpy(), axis=1))
+        ),
+        negative_prob=pl.col("pred_0"),
+    )
+
+    best_th_dict = {}
+    for label_idx, label_df in pred_df.group_by("positive_pred"):
+        truth_df = get_truth_df(config, label_df["document"].unique().to_list(), convert_idx=True)
+        best_score = 0.0
+        best_th = None
+        for th in np.arange(0.10, 0.90, 0.025):
+            pred_df = label_df.select(
+                [
+                    pl.col("document"),
+                    pl.col("token_idx"),
+                    (
+                        pl.when(pl.col("negative_prob") > th)
+                        .then(pl.col("negative_prob"))
+                        .otherwise(pl.col("positive_prob"))
+                    ).alias("prob"),
+                    (
+                        pl.when(pl.col("negative_prob") > th)
+                        .then(pl.lit(0).cast(pl.Int8))
+                        .otherwise(pl.col("positive_pred").cast(pl.Int8))
+                    ).alias("pred"),
+                ]
+            )
+            if config.remove_prefix:
+                pred_df = restore_prefix(config, pred_df)
+
+            score = evaluate_metric(pred_df, truth_df)
+            print(label_idx, th, score)
+            if score > best_score:
+                best_score = score
+                best_th = th
+
+        best_th_dict[label_idx] = (best_th, best_score)
+    return best_th_dict
 
 
 # def get_best_threshold_2nd(config, pred_df: pl.DataFrame):

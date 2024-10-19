@@ -213,8 +213,10 @@ def get_pred_df(oof_df: pl.DataFrame, class_num: int, negative_th: float) -> pl.
     全クラスの確率のテーブルから、最も確率の高いクラスを予測として取得する
     """
     pred_df = oof_df.with_columns(
-        positive_pred=np.argmax(oof_df.select([f"pred_{i}" for i in range(1, class_num)]).to_numpy(), axis=1) + 1,
-        positive_prob=np.max(oof_df.select([f"pred_{i}" for i in range(1, class_num)]).to_numpy(), axis=1),
+        positive_pred=pl.Series(
+            np.argmax(oof_df.select([f"pred_{i}" for i in range(1, class_num)]).to_numpy(), axis=1) + 1
+        ),
+        positive_prob=pl.Series(np.max(oof_df.select([f"pred_{i}" for i in range(1, class_num)]).to_numpy(), axis=1)),
         negative_prob=pl.col("pred_0"),
     )
     pred_df = pred_df.select(
@@ -238,16 +240,59 @@ def get_pred_df(oof_df: pl.DataFrame, class_num: int, negative_th: float) -> pl.
     return pred_df.sort("document", "token_idx")
 
 
+def get_pred_df_individual(
+    oof_df: pl.DataFrame, class_num: int, negative_th_dict: dict[int, tuple[float, float]]
+) -> pl.DataFrame:
+    """
+    全クラスの確率のテーブルから、最も確率の高いクラスを予測として取得する
+    クラスごとに閾値を設定する
+    """
+    pred_df = oof_df.with_columns(
+        positive_pred=pl.Series(
+            np.argmax(oof_df.select([f"pred_{i}" for i in range(1, class_num)]).to_numpy(), axis=1) + 1
+        ),
+        positive_prob=pl.Series(np.max(oof_df.select([f"pred_{i}" for i in range(1, class_num)]).to_numpy(), axis=1)),
+        negative_prob=pl.col("pred_0"),
+    )
+    pred_df_ = []
+    mean_th = np.mean(list(filter(lambda x: x is not None, map(lambda x: x[0], negative_th_dict.values()))))
+    for label_idx, label_df in pred_df.group_by("positive_pred"):
+        negative_th, _ = negative_th_dict[label_idx]
+        if negative_th is None:
+            negative_th = mean_th
+
+        label_df = label_df.select(
+            [
+                pl.col("document"),
+                pl.col("token_idx"),
+                (
+                    pl.when(pl.col("negative_prob") > negative_th)
+                    .then(pl.col("negative_prob"))
+                    .otherwise(pl.col("positive_prob"))
+                ).alias("prob"),
+                (
+                    pl.when(pl.col("negative_prob") > negative_th)
+                    .then(pl.lit(0).cast(pl.Int8))
+                    .otherwise(pl.col("positive_pred").cast(pl.Int8))
+                ).alias("pred"),
+            ]
+        )
+        pred_df_.append(label_df)
+
+    pred_df = pl.concat(pred_df_).sort("document", "token_idx")
+    return pred_df
+
+
 def restore_prefix(config: DictConfig, pred_df: pl.DataFrame):
     """
     Restore Prefix, e.g. NAME_STUDENT -> B-NAME_STUDENT
     """
     # まずスペースに対しての予測を"O"に変更する -> これをしないと精度が著しく下がる
     org_token_df = get_original_token_df(config, pred_df["document"].unique().to_list())
-    pred_df = pred_df.join(org_token_df, on=["document", "token_idx"], how="left")
+    pred_df = pred_df.join(org_token_df, on=["document", "token_idx"], how="left", coalesce=True)
     pred_df = pred_df.with_columns(
         pred=(
-            pl.when(pl.col("token").map_elements(lambda x: re.sub(r"[ \xa0]+", " ", x)) == " ")
+            pl.when(pl.col("token").map_elements(lambda x: re.sub(r"[ \xa0]+", " ", x), return_dtype=pl.Utf8) == " ")
             .then(pl.lit(0))
             .otherwise(pl.col("pred"))
         )
