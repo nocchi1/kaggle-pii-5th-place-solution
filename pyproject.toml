@@ -2,11 +2,8 @@
 name = "kaggle-the-learning-agency-lab-pii-data-detection"
 version = "0.1.0"
 description = "Add your description here"
-authors = [
-    { name = "nocchi1", email = "" }
-]
 dependencies = [
-    "numpy>=1.26.1",
+    "numpy>=1.26.1,<=1.26.4",
     "pandas>=2.1.2",
     "polars>=0.19.12",
     "pyarrow>=14.0.0",
