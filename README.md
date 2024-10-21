@@ -8,7 +8,7 @@ My solution is training models based on [DeBERTa-V3-large](https://huggingface.c
 
 For our team's final submission, we prepared 13 models primarily based on DeBERTa-V3-large and used them for voting ensemble. Although the backbone models used were similar, team members trained them with different settings to enhance diversity. The most notable difference was in the max_length parameter. We believed that by changing the context length, the models could detect PII from various perspectives.
 
-For more detailed our solution, please refer to the URL provided in the Links section.
+For more details about our solution, please refer to the URL provided in the Links section.
 
 ## Preparation
 You can set up the environment and download the required data by running the following commands.
