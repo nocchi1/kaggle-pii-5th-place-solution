@@ -25,7 +25,10 @@ The environment is set up using [rye](https://rye.astral.sh/)
 ```
 
 ## Reproducing the Solution
-[TBU]
+You can train all the models necessary to reproduce the solution by running the following command.
+```sh
+. ./bin/run.sh
+```
 
 ## Links
 - Competition website : [link](https://www.kaggle.com/competitions/pii-detection-removal-from-educational-data/leaderboard)
