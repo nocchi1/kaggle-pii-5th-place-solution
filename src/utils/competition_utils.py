@@ -351,7 +351,7 @@ def get_original_token_df(config: DictConfig, document_ids: list[int]) -> pl.Dat
     return org_token_df
 
 
-def get_truth_df(config, document_ids: list[int], convert_idx: bool) -> pl.DataFrame:
+def get_truth_df(config: DictConfig, document_ids: list[int], convert_idx: bool) -> pl.DataFrame:
     """
     ラベルを元のトークンインデックスと共にデータフレームで取得
 

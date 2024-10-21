@@ -1,0 +1,52 @@
+# general
+exp: "079"
+run_type: "train"
+task_type: "detect"
+seed: 10
+
+# data preprocess
+remove_prefix: false
+exter_dataset:
+  - ["nicholas", true]
+  - ["mpware", false]
+
+# dataset, dataloader
+add_newline_token: true
+max_length: 128
+train_stride: 96
+eval_stride: 64
+train_batch: 16
+eval_batch: 64
+
+# model
+model_path: "microsoft/deberta-v3-large"
+class_num: 13 # with prefix -> 13, without prefix -> 8
+lstm_type: "gru"
+
+# loss
+smooth_type: "none"
+smooth_ratio: 0.05
+smooth_pair: 0.05
+positive_class_weight: 10
+
+# scheduler
+first_cycle_epochs: 4
+
+# training
+epochs: 4
+accumulation_steps: 2
+eval_steps: 1000
+negative_th: 0.660
+negative_th_method: "overall"
+amp: true
+ema: true
+ema_decay: 0.999
+ema_update_after_step: 8000
+
+# additional training
+add_train: true
+add_epochs: 4
+add_first_cycle_epochs: 4
+
+# full training
+full_train: true

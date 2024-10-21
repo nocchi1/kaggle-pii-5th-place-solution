@@ -1,5 +1,33 @@
+# general
 device: "cuda"
 
+# path
 input_path: ${path:"../data/input"}
 exter_path: ${path:"../data/input/external"}
 output_path: ${path:"../data/output"}
+
+# data preprocess
+n_fold: 3
+use_fold: 3
+
+# model
+lstm_type: "none"
+use_hidden_states: 2
+dropout: 0.10
+hidden_dropout: 0.10
+attention_dropout: 0.10
+reinit_layer_num: 0
+freeze_layer_num: 0
+
+# optimizer
+optimizer_type: "AdamW"
+pretrained_lr: 1e-6
+head_lr: 1e-4
+weight_decay: 0.01
+betas: [0.9, 0.999]
+
+scheduler_type: "cosine_custom"
+cycle_factor: 1
+num_warmup_steps: 0
+min_lr: 1e-9
+gamma: 1.0
