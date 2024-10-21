@@ -1,6 +1,6 @@
 # The Learning Agency Lab - PII Data Detection - 5th Place Solution
 ![certificate](./appendix/certificate.png)
-This repository contains the code for the 5th place solution (Ryota Part) in the "PII Data Detection" competition hosted on Kaggle.
+This repository contains the code for the 5th place solution (Ryota Part) in the "The Learning Agency Lab - PII Data Detection" competition hosted on Kaggle.
 In this competition, participants were given the task of developing machine learning models to detect personally identifiable information (PII) in student writing. The objective is to create automated methods for identifying and removing PII from educational datasets, thereby facilitating the release of these datasets for research and development of educational tools while ensuring student privacy.
 
 ## Solution Summary
