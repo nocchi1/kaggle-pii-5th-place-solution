@@ -13,7 +13,7 @@ from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 
 from src.postprocess import PostProcessor
-from src.preprocess import DetectDataProvider
+from src.preprocess import DetectDataReader
 from src.train import Trainer, get_full_train_loader, get_train_loaders
 from src.train.dataloader_utils import CollateFn, get_sampler, get_tokenizer
 from src.utils import TimeUtil, get_config, get_logger, seed_everything
@@ -25,18 +25,25 @@ def main():
     # Setup
     parser = argparse.ArgumentParser(description="")
     parser.add_argument("-c", "--config_name", help="config file name", type=str, required=True)
-    parser.add_argument("-d", "--debug", help="debug mode", type=bool, action="store_true")
+    parser.add_argument("-d", "--debug", help="debug mode", action="store_true")
     args = parser.parse_args()
 
     warnings.filterwarnings("ignore")
-    config = get_config(args.config_name, config_dir=Path("../config"))
+    config = get_config(args.config_name, config_dir=Path("./config"))
     config.debug = args.debug
     logger = get_logger(config.output_path)
     logger.info(f"EXP:{config.exp} Start...")
     seed_everything(config.seed)
 
+    # Overwrite Config for Debug
+    if config.debug:
+        config.eval_steps = 100
+        config.ema_update_after_step = 100
+        config.epochs = 2
+        config.add_epochs = 2
+
     # Load Data
-    dpr = DetectDataProvider(config, "train")
+    dpr = DetectDataReader(config, "train")
     data = dpr.load_data()
     logger.info(f"Data Size: {len(data)}")
 
@@ -80,7 +87,7 @@ def main():
             trainer = Trainer(config, logger, save_suffix=f"_fold{fold}")
             if config.smooth_type == "online":
                 trainer.loss_fn.soft_matrix = loss_soft_matrix
-            best_score, best_add_steps_, oof_df = trainer.train(
+            best_score, best_add_steps_, add_oof_df = trainer.train(
                 train_loader,
                 valid_loader,
                 retrain=True,
@@ -88,14 +95,20 @@ def main():
                 retrain_best_score=best_score,
             )
             best_add_steps.append(best_add_steps_)
+            logger.info(
+                f"FOLD{fold} : Additional Training Done! -->> Best Score: {best_score}, Best Add Steps: {best_add_steps_}"
+            )
+            if add_oof_df is not None:
+                oof_df = add_oof_df.clone()
+
+            del trainer, train_dataset, add_oof_df
+            gc.collect()
+            torch.cuda.empty_cache()
 
         oof_df.write_parquet(config.output_path / f"oof_fold{fold}.parquet")
         oof_dfs.append(oof_df)
-        logger.info(
-            f"FOLD{fold} : Additional Training Done! -->> Best Score: {best_score}, Best Add Steps: {best_add_steps_}"
-        )
 
-        del train_loader, valid_loader, train_dataset, trainer, oof_df
+        del train_loader, valid_loader, oof_df
         gc.collect()
         torch.cuda.empty_cache()
 
@@ -116,17 +129,19 @@ def main():
 
     # Full Training
     if config.full_train:
-        full_steps = np.max(best_steps)
-        full_add_steps = np.max(best_add_steps)
         logger.info("Full Train : Training Start...")
         train_loader = get_full_train_loader(config, data)
 
         # First Training
         trainer = Trainer(config, logger, save_suffix="")
-        trainer.train(train_loader, valid_loader=None, full_train=True, full_steps=full_steps)
+        trainer.train(train_loader, valid_loader=None, full_train=True, full_steps=np.max(best_steps))
         if config.smooth_type == "online":
             loss_soft_matrix = trainer.loss_fn.soft_matrix.clone()
         logger.info("Full Train : First Training Done!")
+
+        del trainer
+        gc.collect()
+        torch.cuda.empty_cache()
 
         if config.add_train:
             # Create High-Quality Dataloader
@@ -151,11 +166,14 @@ def main():
                 retrain=True,
                 retrain_weight_name="model_full",
                 full_train=True,
-                full_steps=full_add_steps,
+                full_steps=np.max(best_add_steps),
             )
             logger.info("Full Train : Additional Training Done!")
+            del trainer, train_dataset
+            gc.collect()
+            torch.cuda.empty_cache()
 
-        del train_loader, trainer
+        del train_loader
         gc.collect()
         torch.cuda.empty_cache()
 
@@ -167,3 +185,7 @@ def main():
     pred_df = pper.post_process(pred_df)
     score = evaluate_metric(pred_df, truth_df)
     logger.info(f"OOF Score after Post-Process: {score:.5f}")
+
+
+if __name__ == "__main__":
+    main()

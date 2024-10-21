@@ -1,5 +1,5 @@
 # general
-exp: "087"
+exp: "082"
 run_type: "train"
 task_type: "detect"
 seed: 10

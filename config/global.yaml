@@ -2,9 +2,9 @@
 device: "cuda"
 
 # path
-input_path: ${path:"../data/input"}
-exter_path: ${path:"../data/input/external"}
-output_path: ${path:"../data/output"}
+input_path: ${path:"./data/input"}
+exter_path: ${path:"./data/input/external"}
+output_path: ${path:"./data/output"}
 
 # data preprocess
 n_fold: 3

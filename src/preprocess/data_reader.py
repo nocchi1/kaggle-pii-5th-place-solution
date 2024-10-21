@@ -8,7 +8,7 @@ from src.preprocess.validation import split_validation
 from src.utils.competition_utils import convert_label_str2index, load_json_data
 
 
-class DetectDataProvider:
+class DetectDataReader:
     def __init__(self, config: DictConfig, data_type: Literal["train", "test"]):
         self.config = config
         self.data_type = data_type

@@ -43,11 +43,13 @@ class DetectModel(nn.Module):
             nn.Linear(128, config.class_num),
         )
         self.layer_norm = nn.LayerNorm(hidden_size * self.use_hidden_states)
+        self.dropout = nn.Dropout(config.dropout)
 
         self.head.apply(self._init_weights)
         if config.lstm_type != "none":
             self._lstm_init_weights(self.lstm)
 
+    # DeBERTaの重み初期化関数
     def _init_weights(self, module):
         if isinstance(module, nn.Linear):
             module.weight.data.normal_(mean=0.0, std=self.model_config.initializer_range)
@@ -79,6 +81,7 @@ class DetectModel(nn.Module):
         x = self.layer_norm(x)
         if self.lstm_type != "none":
             x, _ = self.lstm(x)
+            x = self.dropout(x)
         x = self.head(x)
         return x
 

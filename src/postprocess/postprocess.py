@@ -122,6 +122,9 @@ class PostProcessor:
                         if not finding:
                             new_preds_org[i] = f"B-{label_type}"
 
+                elif prefix == "I" and prefix_p1 is None:
+                    new_preds_org[i] = f"B-{label_type}"
+
             doc_df = doc_df.with_columns(pred_org=pl.Series(new_preds_org.tolist()).cast(pl.Utf8)).with_columns(
                 pred=pl.col("pred_org").replace(TARGET2IDX_WITH_BIO, default=0)
             )
