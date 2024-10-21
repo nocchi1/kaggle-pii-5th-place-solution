@@ -27,7 +27,7 @@ The environment is set up using [rye](https://rye.astral.sh/)
 ## Reproducing the Solution
 You can train all the models necessary to reproduce the solution by running the following command.
 ```sh
-. ./bin/run.sh
+. ./bin/train.sh
 ```
 
 ## Links
