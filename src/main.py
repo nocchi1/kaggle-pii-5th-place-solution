@@ -43,8 +43,8 @@ def main():
         config.add_epochs = 2
 
     # Load Data
-    dpr = DetectDataReader(config, "train")
-    data = dpr.load_data()
+    reader = DetectDataReader(config, "train")
+    data = reader.load_data()
     logger.info(f"Data Size: {len(data)}")
 
     # Create Dataloader
@@ -120,9 +120,13 @@ def main():
     oof_df.write_parquet(config.output_path / "oof.parquet")
     del oof_dfs
     gc.collect()
+    oof_fold_files = config.output_path.glob("oof_fold*.parquet")
+    for f in oof_fold_files:
+        Path(f).unlink()
 
     # Get Best Negative Threshold
-    best_score, best_th = get_best_negative_threshold(config, oof_df)
+    truth_df = get_truth_df(config, oof_df["document"].unique().to_list(), convert_idx=False)
+    best_score, best_th = get_best_negative_threshold(config, oof_df, truth_df)
     message = f"Overall OOF Best Score: {best_score}, Best Negative Threshold: {best_th}"
     logger.info(message)
     config.negative_th = best_th.item()
@@ -133,8 +137,9 @@ def main():
         train_loader = get_full_train_loader(config, data)
 
         # First Training
+        full_steps = np.max(best_steps)
         trainer = Trainer(config, logger, save_suffix="")
-        trainer.train(train_loader, valid_loader=None, full_train=True, full_steps=np.max(best_steps))
+        trainer.train(train_loader, valid_loader=None, full_train=True, full_steps=full_steps)
         if config.smooth_type == "online":
             loss_soft_matrix = trainer.loss_fn.soft_matrix.clone()
         logger.info("Full Train : First Training Done!")
@@ -144,34 +149,36 @@ def main():
         torch.cuda.empty_cache()
 
         if config.add_train:
-            # Create High-Quality Dataloader
-            train_dataset = train_loader.dataset
-            train_dataset.drop_first_only_data()
-            train_loader = DataLoader(
-                train_dataset,
-                sampler=get_sampler(train_dataset),
-                batch_size=config.train_batch,
-                collate_fn=collate_fn,
-                pin_memory=True,
-                drop_last=True,
-            )
+            full_add_steps = np.max(best_add_steps)
+            if full_add_steps > 0:
+                # Create High-Quality Dataloader
+                train_dataset = train_loader.dataset
+                train_dataset.drop_first_only_data()
+                train_loader = DataLoader(
+                    train_dataset,
+                    sampler=get_sampler(train_dataset),
+                    batch_size=config.train_batch,
+                    collate_fn=collate_fn,
+                    pin_memory=True,
+                    drop_last=True,
+                )
 
-            # Additional Training
-            trainer = Trainer(config, logger, save_suffix="")
-            if config.smooth_type == "online":
-                trainer.loss_fn.soft_matrix = loss_soft_matrix
-            trainer.train(
-                train_loader,
-                valid_loader=None,
-                retrain=True,
-                retrain_weight_name="model_full",
-                full_train=True,
-                full_steps=np.max(best_add_steps),
-            )
-            logger.info("Full Train : Additional Training Done!")
-            del trainer, train_dataset
-            gc.collect()
-            torch.cuda.empty_cache()
+                # Additional Training
+                trainer = Trainer(config, logger, save_suffix="")
+                if config.smooth_type == "online":
+                    trainer.loss_fn.soft_matrix = loss_soft_matrix
+                trainer.train(
+                    train_loader,
+                    valid_loader=None,
+                    retrain=True,
+                    retrain_weight_name="model_full",
+                    full_train=True,
+                    full_steps=full_add_steps,
+                )
+                logger.info("Full Train : Additional Training Done!")
+                del trainer, train_dataset
+                gc.collect()
+                torch.cuda.empty_cache()
 
         del train_loader
         gc.collect()

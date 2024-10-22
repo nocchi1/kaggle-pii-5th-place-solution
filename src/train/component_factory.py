@@ -4,10 +4,8 @@ from omegaconf import DictConfig
 from torch import nn
 from torch.optim.optimizer import Optimizer
 
-from src.model.detect_model import DetectModel
-
-# from src.model.classify_model import ClassifyModel
-from src.train.loss import OnlineSmoothingCELoss, SmoothingCELoss
+from src.model.model import ClassifyModel, DetectModel
+from src.train.loss import MaskedBCELoss, OnlineSmoothingCELoss, SmoothingCELoss
 from src.train.optimizer import get_optimizer
 from src.train.scheduler import get_scheduler
 
@@ -17,10 +15,8 @@ class ComponentFactory:
     def get_model(config: DictConfig):
         if config.task_type == "detect":
             model = DetectModel(config)
-        # [TODO]要編集
         elif config.task_type == "classify":
-            pass
-            # model = ClassifyModel(config)
+            model = ClassifyModel(config)
 
         if config.reinit_layer_num > 0:
             model.reinit_layers(config.reinit_layer_num)
@@ -34,14 +30,14 @@ class ComponentFactory:
             class_weight = [1] + [config.positive_class_weight] * (config.class_num - 1)
             if config.smooth_type == "online":
                 loss_fn = OnlineSmoothingCELoss(
-                    config, alpha=0.5, class_weight=class_weight
-                )  # alphaはチューニングした方がいいかもしれない
+                    config,
+                    alpha=0.5,  # チューニングの余地あり
+                    class_weight=class_weight,
+                )
             else:
                 loss_fn = SmoothingCELoss(config, class_weight=class_weight)
-        # [TODO]要編集
         elif config.task_type == "classify":
-            # loss_fn = WeightedBCELoss()
-            pass
+            loss_fn = MaskedBCELoss(config)
         return loss_fn
 
     @staticmethod

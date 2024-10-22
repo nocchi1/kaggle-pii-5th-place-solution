@@ -23,22 +23,38 @@ def get_sampler(dataset: Dataset) -> Sampler:
 
 
 class CollateFn:
-    def __init__(self, tokenizer: AutoTokenizer, is_train: bool = True):
+    def __init__(self, tokenizer: AutoTokenizer, is_train: bool = True, has_position: bool = True):
         self.tokenizer = tokenizer
         self.is_train = is_train
+        self.has_position = has_position
 
     def __call__(self, batch):
-        if self.is_train:
-            input_ids, attention_mask, positions_ratio, positions_abs, token_labels = zip(*batch)
+        if self.has_position:
+            if self.is_train:
+                input_ids, attention_mask, positions_ratio, positions_abs, token_labels = zip(*batch)
+            else:
+                input_ids, attention_mask, positions_ratio, positions_abs = zip(*batch)
+        elif self.is_train:
+            input_ids, attention_mask, token_labels = zip(*batch)
         else:
-            input_ids, attention_mask, positions_ratio, positions_abs = zip(*batch)
+            input_ids, attention_mask = zip(*batch)
 
         input_ids = pad_sequence(input_ids, batch_first=True, padding_value=self.tokenizer.pad_token_id)
         attention_mask = pad_sequence(attention_mask, batch_first=True, padding_value=0)
-        positions_ratio = pad_sequence(positions_ratio, batch_first=True, padding_value=0)
-        positions_abs = pad_sequence(positions_abs, batch_first=True, padding_value=0)
-        positions = torch.stack([positions_ratio, positions_abs], dim=-1)
         if self.is_train:
             token_labels = pad_sequence(token_labels, batch_first=True, padding_value=-1)
-            return input_ids, attention_mask, positions, token_labels
-        return input_ids, attention_mask, positions
+
+        if self.has_position:
+            positions_ratio = pad_sequence(positions_ratio, batch_first=True, padding_value=0)
+            positions_abs = pad_sequence(positions_abs, batch_first=True, padding_value=0)
+            positions = torch.stack([positions_ratio, positions_abs], dim=-1)
+
+        if self.has_position:
+            if self.is_train:
+                return input_ids, attention_mask, positions, token_labels
+            else:
+                return input_ids, attention_mask, positions
+        elif self.is_train:
+            return input_ids, attention_mask, token_labels
+        else:
+            return input_ids, attention_mask

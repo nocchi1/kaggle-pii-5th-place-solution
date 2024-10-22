@@ -131,3 +131,19 @@ class OnlineSmoothingCELoss(nn.Module):
         self.soft_matrix = soft_matrix.detach()
         self.stats_matrix = torch.zeros((self.class_num, self.class_num)).to(self.device)
         self.counter = torch.zeros(self.class_num).to(self.device)
+
+
+class MaskedBCELoss(nn.Module):
+    def __init__(self, config: DictConfig):
+        super().__init__()
+        pos_weight = torch.tensor([config.positive_class_weight], dtype=torch.float, device=config.device)
+        self.bce_loss = nn.BCEWithLogitsLoss(pos_weight=pos_weight, reduction="none")
+        self.epsilon = 1e-6
+
+    def forward(self, y_pred: torch.Tensor, y_true: torch.Tensor):
+        y_pred = y_pred.view(-1)
+        y_true = y_true.view(-1).to(dtype=torch.float)
+        loss = self.bce_loss(y_pred, y_true)
+        mask = torch.where(y_true >= 0, 1, 0).to(dtype=torch.float)
+        loss = torch.sum(loss * mask) / (torch.sum(mask) + self.epsilon)
+        return loss

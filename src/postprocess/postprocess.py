@@ -8,6 +8,8 @@ from tqdm import tqdm
 from src.utils.competition_utils import get_original_token_df, get_truth_df, load_json_data
 from src.utils.constant import IDX2TARGET_WITH_BIO, TARGET2IDX_WITH_BIO
 
+__all__ = ["PostProcessor"]
+
 
 class PostProcessor:
     """

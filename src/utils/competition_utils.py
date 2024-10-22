@@ -138,6 +138,40 @@ def mapping_index_char2token_overlapped(
     return token_indices
 
 
+def get_char_pred_df(
+    preds: np.ndarray,
+    overlap_doc_ids: np.ndarray,
+    offset_mappings: list[list[tuple[int, int]]],
+    class_num: int,
+):
+    """
+    文字単位に集約した予測値を取得する
+    """
+    doc_ids, char_indices, char_preds = [], [], []
+    for pred, doc_id, offset in zip(preds, overlap_doc_ids, offset_mappings):
+        for i in range(len(offset)):
+            start, end = offset[i]
+            if start == 0 and end == 0:
+                continue
+
+            doc_ids.extend([doc_id] * len(range(start, end)))
+            char_indices.extend(list(range(start, end)))
+            char_preds.extend([pred[i]] * len(range(start, end)))
+
+    char_preds = np.stack(char_preds, axis=0)  # (char_len, class_num)
+    char_pred_df = pl.DataFrame(char_preds, schema=[f"pred_{i}" for i in range(class_num)])
+    char_pred_df = char_pred_df.with_columns(
+        document=pl.Series(doc_ids).cast(pl.Int32),
+        char_idx=pl.Series(char_indices).cast(pl.Int32),
+    )
+    char_pred_df = (
+        char_pred_df.group_by("document", "char_idx")
+        .agg([pl.col(f"pred_{i}").mean() for i in range(class_num)])
+        .sort("document", "char_idx")
+    )
+    return char_pred_df
+
+
 def get_char2org_df(
     doc_ids: list[int],
     full_text: list[str],
@@ -172,40 +206,6 @@ def get_char2org_df(
     char2org_df = np.concatenate(char2org_df, axis=0)
     char2org_df = pl.DataFrame(char2org_df, schema={"document": pl.Int32, "char_idx": pl.Int32, "token_idx": pl.Int32})
     return char2org_df
-
-
-def get_char_pred_df(
-    preds: np.ndarray,
-    overlap_doc_ids: np.ndarray,
-    offset_mappings: list[list[tuple[int, int]]],
-    class_num: int,
-):
-    """
-    文字単位に集約した予測値を取得する
-    """
-    doc_ids, char_indices, char_preds = [], [], []
-    for pred, doc_id, offset in zip(preds, overlap_doc_ids, offset_mappings):
-        for i in range(len(offset)):
-            start, end = offset[i]
-            if start == 0 and end == 0:
-                continue
-
-            doc_ids.extend([doc_id] * len(range(start, end)))
-            char_indices.extend(list(range(start, end)))
-            char_preds.extend([pred[i]] * len(range(start, end)))
-
-    char_preds = np.stack(char_preds, axis=0)  # (char_len, class_num)
-    char_pred_df = pl.DataFrame(char_preds, schema=[f"pred_{i}" for i in range(class_num)])
-    char_pred_df = char_pred_df.with_columns(
-        document=pl.Series(doc_ids).cast(pl.Int32),
-        char_idx=pl.Series(char_indices).cast(pl.Int32),
-    )
-    char_pred_df = (
-        char_pred_df.group_by("document", "char_idx")
-        .agg([pl.col(f"pred_{i}").mean() for i in range(class_num)])
-        .sort("document", "char_idx")
-    )
-    return char_pred_df
 
 
 def get_pred_df(oof_df: pl.DataFrame, class_num: int, negative_th: float) -> pl.DataFrame:
@@ -379,3 +379,27 @@ def get_truth_df(config: DictConfig, document_ids: list[int], convert_idx: bool)
     if convert_idx:
         truth_df = truth_df.with_columns(label=pl.col("label").replace(TARGET2IDX_WITH_BIO, default=-1))
     return truth_df
+
+
+def get_first_pred_df(
+    config: DictConfig,
+    oof_df: pl.DataFrame | None,
+    oof_file_path: Path | None,
+    document_ids: list[int] | None,
+    negative_th: float,
+):
+    """
+    1st stage(Detection)の予測確率からprefixありの予測結果を返す
+    """
+    assert oof_df is not None or oof_file_path is not None, "oof_df or oof_file_path must be given"
+    if oof_df is None:
+        oof_df = pl.read_parquet(oof_file_path)
+
+    if document_ids is not None:
+        oof_df = oof_df.filter(pl.col("document").is_in(document_ids))
+
+    class_num = len(list(filter(lambda x: "pred" in x, oof_df.columns)))
+    pred_df = get_pred_df(oof_df, class_num=class_num, negative_th=negative_th)
+    if class_num == 8:
+        pred_df = restore_prefix(config, pred_df)  # input_pathの情報が必要なのでconfigを渡す
+    return pred_df

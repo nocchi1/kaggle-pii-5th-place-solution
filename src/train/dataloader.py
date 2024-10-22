@@ -4,12 +4,13 @@ from omegaconf import DictConfig
 from torch.utils.data import DataLoader
 
 from src.train.dataloader_utils import CollateFn, get_sampler, get_tokenizer
-from src.train.dataset import DetectDataset
+from src.train.dataset import ClassifyDataset, DetectDataset
 
 
 def get_train_loaders(config: DictConfig, data: list[dict]):
     tokenizer = get_tokenizer(config)
-    collate_fn = CollateFn(tokenizer, is_train=True)
+    has_position = True if config.task_type == "detect" else False
+    collate_fn = CollateFn(tokenizer, is_train=True, has_position=has_position)
 
     dataloaders = []
     for fold in range(config.n_fold):
@@ -23,15 +24,19 @@ def get_train_loaders(config: DictConfig, data: list[dict]):
             else:
                 train_data.append(d)
 
-        train_dataset = DetectDataset(config, train_data, tokenizer, data_type="train")
-        valid_dataset = DetectDataset(config, valid_data, tokenizer, data_type="valid")
-        train_sampler = get_sampler(train_dataset)
+        if config.task_type == "detect":
+            train_dataset = DetectDataset(config, train_data, tokenizer, data_type="train")
+            valid_dataset = DetectDataset(config, valid_data, tokenizer, data_type="valid")
+        elif config.task_type == "classify":
+            train_dataset = ClassifyDataset(config, train_data, tokenizer, data_type="train")
+            valid_dataset = ClassifyDataset(config, valid_data, tokenizer, data_type="valid")
 
+        train_sampler = get_sampler(train_dataset)
         train_loader = DataLoader(
             train_dataset,
-            sampler=train_sampler,
             batch_size=config.train_batch,
             collate_fn=collate_fn,
+            sampler=train_sampler,
             pin_memory=True,
             drop_last=True,
         )
@@ -49,15 +54,20 @@ def get_train_loaders(config: DictConfig, data: list[dict]):
 
 def get_full_train_loader(config, data: list[dict]) -> DataLoader:
     tokenizer = get_tokenizer(config)
-    collate_fn = CollateFn(tokenizer, is_train=True)
+    has_position = True if config.task_type == "detect" else False
+    collate_fn = CollateFn(tokenizer, is_train=True, has_position=has_position)
 
-    train_dataset = DetectDataset(config, data, tokenizer, data_type="train")
+    if config.task_type == "detect":
+        train_dataset = DetectDataset(config, data, tokenizer, data_type="train")
+    elif config.task_type == "classify":
+        train_dataset = ClassifyDataset(config, data, tokenizer, data_type="train")
+
     train_sampler = get_sampler(train_dataset)
     train_loader = DataLoader(
         train_dataset,
-        sampler=train_sampler,
         batch_size=config.train_batch,
         collate_fn=collate_fn,
+        sampler=train_sampler,
         pin_memory=True,
         drop_last=True,
     )

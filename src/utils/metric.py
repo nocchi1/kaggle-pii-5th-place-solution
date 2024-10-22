@@ -29,8 +29,9 @@ def evaluate_metric(
     return score
 
 
-def get_best_negative_threshold(config: DictConfig, oof_df: pl.DataFrame, stride: float = 0.025):
-    truth_df = get_truth_df(config, oof_df["document"].unique().to_list(), convert_idx=True)
+def get_best_negative_threshold(
+    config: DictConfig, oof_df: pl.DataFrame, truth_df: pl.DataFrame, stride: float = 0.025
+):
     best_score = 0
     best_th = None
 
@@ -48,7 +49,7 @@ def get_best_negative_threshold(config: DictConfig, oof_df: pl.DataFrame, stride
 
 
 def get_best_negative_threshold_individual(
-    config: DictConfig, oof_df: pl.DataFrame
+    config: DictConfig, oof_df: pl.DataFrame, truth_df: pl.DataFrame, stride: float = 0.025
 ):  # ここのpii_typeごとのthresholdを返す
     # 最も確率の高いpositiveクラスを算出
     pred_df = oof_df.with_columns(
@@ -68,7 +69,9 @@ def get_best_negative_threshold_individual(
         truth_df = get_truth_df(config, label_df["document"].unique().to_list(), convert_idx=True)
         best_score = 0.0
         best_th = None
-        for th in np.arange(0.10, 0.90, 0.025):
+
+        min_th, max_th = 0.10, 0.90
+        for th in np.arange(min_th, max_th, stride):
             pred_df = label_df.select(
                 [
                     pl.col("document"),

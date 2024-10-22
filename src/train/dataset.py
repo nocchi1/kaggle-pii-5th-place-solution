@@ -15,6 +15,8 @@ from src.utils.competition_utils import (
     mapping_index_org2char,
 )
 
+__all__ = ["DetectDataset", "ClassifyDataset"]
+
 
 class DetectDataset(Dataset):
     def __init__(
@@ -185,7 +187,7 @@ class DetectRandomDataset(Dataset):
 
             self.token_labels = []
             for org_idx, doc_id in zip(token_org_idx, self.doc_ids):
-                label = org_labels_dict[doc_id][org_idx]
+                label = org_labels_dict[str(doc_id)][org_idx]
                 space_idx = np.where(np.array(org_idx) == -1)[0]
                 label[space_idx] = -1  # In the case of -1, we need to keep it as -1
                 self.token_labels.append(label)
@@ -256,3 +258,99 @@ class DetectRandomDataset(Dataset):
         self.positions_ratio = list(itertools.compress(self.positions_ratio, mask))
         self.positions_abs = list(itertools.compress(self.positions_abs, mask))
         self.token_labels = list(itertools.compress(self.token_labels, mask))
+
+
+class ClassifyDataset(Dataset):
+    def __init__(
+        self,
+        config: DictConfig,
+        data: list[dict],
+        tokenizer: AutoTokenizer,
+        data_type: Literal["train", "valid", "test"],
+    ):
+        self.config = config
+        self.data_type = data_type
+        self.tokenizer = tokenizer
+        self.doc_ids = [d["document"] for d in data]
+        self.full_texts = [d["full_text"] for d in data]
+        self.org_tokens = [d["tokens"] for d in data]
+        self.whitespaces = [d["trailing_whitespace"] for d in data]
+        self.mask_token_id = tokenizer.mask_token_id
+
+        stride = config.train_stride if data_type == "train" else config.eval_stride
+        tokens = tokenizer(
+            self.full_texts,
+            max_length=config.max_length,
+            stride=stride,
+            return_overflowing_tokens=True,
+            return_offsets_mapping=True,
+            truncation=True,
+        )
+        self.input_ids = tokens["input_ids"]
+        self.attention_mask = tokens["attention_mask"]
+        self.offset_mapping = tokens["offset_mapping"]
+        self.overflow_mapping = tokens["overflow_to_sample_mapping"]
+
+        # Note that external data has an idx of type str, so all idxs are converted to type str
+        self.overlap_doc_ids = np.array(self.doc_ids)[self.overflow_mapping]
+        org_tokens_idx = [list(range(len(d["tokens"]))) for d in data]
+
+        char_org_idx = mapping_index_org2char(
+            self.full_texts,
+            self.org_tokens,
+            org_tokens_idx,
+            self.whitespaces,
+            fill_val=-1,
+        )
+        token_org_idx = mapping_index_char2token_overlapped(
+            char_org_idx,
+            self.input_ids,
+            self.offset_mapping,
+            self.overflow_mapping,
+            fill_val=-1,
+        )
+
+        self.name_preds = [d["name_pred"] for d in data]
+        name_preds_dict = {str(d["document"]): np.array(d["name_pred"]) for d in data}
+        self.token_name_preds = []
+        for org_idx, doc_id in zip(token_org_idx, self.overlap_doc_ids):
+            name_pred = name_preds_dict[str(doc_id)][org_idx]
+            space_idx = np.where(np.array(org_idx) == -1)[0]
+            name_pred[space_idx] = 0
+            self.token_name_preds.append(name_pred)
+
+        if data_type in ["train", "valid"]:
+            self.second_labels = [d["second_labels"] for d in data]
+            second_labels_dict = {str(d["document"]): np.array(d["second_labels"]) for d in data}
+            self.token_labels = []
+            for org_idx, doc_id in zip(token_org_idx, self.overlap_doc_ids):
+                label = second_labels_dict[str(doc_id)][org_idx]
+                space_idx = np.where(np.array(org_idx) == -1)[0]
+                label[space_idx] = -1  # In the case of -1, we need to keep it as -1
+                self.token_labels.append(label)
+
+    def __getitem__(self, idx: int):
+        input_ids = self.input_ids[idx]
+        name_preds = self.token_name_preds[idx]
+
+        masked_input_ids = []
+        for id_, pred in zip(input_ids, name_preds):
+            if pred == 1:
+                masked_input_ids.append(self.mask_token_id)
+            else:
+                masked_input_ids.append(id_)
+
+        if self.data_type in ["train", "valid"]:
+            return (
+                torch.tensor(masked_input_ids, dtype=torch.long, device="cpu"),
+                torch.tensor(self.attention_mask[idx], dtype=torch.long, device="cpu"),
+                torch.tensor(self.token_labels[idx], dtype=torch.long, device="cpu"),
+            )
+        else:
+            return (
+                torch.tensor(masked_input_ids, dtype=torch.long, device="cpu"),
+                torch.tensor(self.attention_mask[idx], dtype=torch.long, device="cpu"),
+            )
+
+    def __len__(self):
+        return len(self.input_ids)

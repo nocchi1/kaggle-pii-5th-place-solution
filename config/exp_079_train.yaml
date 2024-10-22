@@ -35,7 +35,7 @@ first_cycle_epochs: 4
 # training
 epochs: 4
 accumulation_steps: 2
-eval_steps: 1000
+eval_steps: 2000
 negative_th: 0.660
 negative_th_method: "overall"
 amp: true
@@ -45,8 +45,8 @@ ema_update_after_step: 8000
 
 # additional training
 add_train: true
-add_epochs: 4
-add_first_cycle_epochs: 4
+add_epochs: 2
+add_first_cycle_epochs: 2
 
 # full training
 full_train: true

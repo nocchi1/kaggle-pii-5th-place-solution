@@ -11,7 +11,7 @@ from tqdm.auto import tqdm
 
 from src.train.component_factory import ComponentFactory
 from src.train.ema import ModelEmaV3
-from src.utils.competition_utils import get_char2org_df, get_char_pred_df
+from src.utils.competition_utils import get_char2org_df, get_char_pred_df, get_truth_df
 from src.utils.metric import get_best_negative_threshold
 from src.utils.utils import AverageMeter, clean_message
 
@@ -173,7 +173,8 @@ class Trainer:
                 preds.extend(F.softmax(out, dim=-1).cpu().numpy().tolist())
 
         oof_df = self.get_oof_df(preds, valid_loader)
-        score, best_th = get_best_negative_threshold(self.config, oof_df)
+        truth_df = get_truth_df(self.config, oof_df["document"].unique().to_list(), convert_idx=False)
+        score, best_th = get_best_negative_threshold(self.config, oof_df, truth_df)
 
         loss = self.valid_loss.avg
         message = f"""
@@ -211,7 +212,7 @@ class Trainer:
             valid_loader.dataset.org_tokens,
             valid_loader.dataset.whitespaces,
         )
-        oof_df = char_pred_df.join(char2org_df, on=["document", "char_idx"], how="left", coalesce=True)
+        oof_df = char2org_df.join(char_pred_df, on=["document", "char_idx"], how="left", coalesce=True)
         oof_df = (
             oof_df.filter(pl.col("token_idx") != -1)
             .group_by("document", "token_idx")

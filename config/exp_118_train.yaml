@@ -6,19 +6,21 @@ device: "cuda"
 seed: 10
 
 # data preprocess
+first_negative_th: 0.400 # [TODO]あとで調整
 n_fold: 3
 use_fold: 3
 
 # dataset, dataloader
 add_newline_token: true
-# max_length: 128
-# train_stride: 96
-# eval_stride: 64
-# train_batch: 16
-# eval_batch: 64
+max_length: 2048
+train_stride: 1024
+eval_stride: 1024
+train_batch: 2
+eval_batch: 4
 
 # model
 model_path: "microsoft/deberta-v3-large"
+class_num: 1
 lstm_type: "none"
 use_hidden_states: 2
 dropout: 0.10
@@ -45,16 +47,16 @@ num_warmup_steps: 0
 min_lr: 1e-9
 gamma: 1.0
 
-# # training
-# epochs: 4
-# accumulation_steps: 2
-# eval_steps: 1000
+# training
+epochs: 4
+accumulation_steps: 8
+eval_steps: 1000
 # negative_th: 0.660
 # negative_th_method: "overall"
-# amp: true
-# ema: true
-# ema_decay: 0.999
-# ema_update_after_step: 8000
+amp: true
+ema: true
+ema_decay: 0.999
+ema_update_after_step: 8000
 
 # full training
 full_train: true
