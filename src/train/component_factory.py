@@ -1,13 +1,12 @@
-import torch
-import torch.nn.functional as F
 from omegaconf import DictConfig
-from torch import nn
 from torch.optim.optimizer import Optimizer
 
 from src.model.model import ClassifyModel, DetectModel
 from src.train.loss import MaskedBCELoss, OnlineSmoothingCELoss, SmoothingCELoss
 from src.train.optimizer import get_optimizer
 from src.train.scheduler import get_scheduler
+
+__all__ = ["ComponentFactory"]
 
 
 class ComponentFactory:
@@ -31,7 +30,7 @@ class ComponentFactory:
             if config.smooth_type == "online":
                 loss_fn = OnlineSmoothingCELoss(
                     config,
-                    alpha=0.5,  # チューニングの余地あり
+                    alpha=0.5,  # Can be further tuned
                     class_weight=class_weight,
                 )
             else:

@@ -51,7 +51,7 @@ class DetectModel(nn.Module):
         if config.lstm_type != "none":
             self._lstm_init_weights(self.lstm)
 
-    # DeBERTaの重み初期化関数
+    # DeBERTa weight initialization function
     def _init_weights(self, module):
         if isinstance(module, nn.Linear):
             module.weight.data.normal_(mean=0.0, std=self.model_config.initializer_range)
@@ -87,12 +87,12 @@ class DetectModel(nn.Module):
         x = self.head(x)
         return x
 
-    # 指定した層の数だけ再初期化する(エンコーダーの最後の層からカウント)
+    # Reinitialize the specified number of layers (counting from the last encoder layer)
     def reinit_layers(self, reinit_layer_num: int):
         for i in range(1, reinit_layer_num + 1):
             self.backbone.encoder.layer[-i].apply(self._init_weights)
 
-    # 指定した層の数だけFreezeする(エンコーダーの最初の層からカウント)
+    # Freeze the specified number of layers (counting from the first embedding layer)
     def freeze_layers(self, freeze_layer_num: int):
         for i in range(freeze_layer_num):
             if i == 0:
@@ -102,7 +102,7 @@ class DetectModel(nn.Module):
                 for params in self.backbone.encoder.layer[i - 1].parameters():
                     params.requires_grad = False
 
-    # 初期化した層以外の層をFreezeする
+    # Freeze all layers except the specified number of reinitialized layers
     def freeze_backbone(self, reinit_layer_num: int):
         for param in self.backbone.parameters():
             param.requires_grad = False
@@ -111,7 +111,7 @@ class DetectModel(nn.Module):
             for params in self.backbone.encoder.layer[-i].parameters():
                 params.requires_grad = True
 
-    # BackboneのFreezeを解除する, 元からFreezeに指定した層はFreezeのまま
+    # Unfreeze the backbone, keeping the originally frozen layers frozen
     def unfreeze_backbone(self, freeze_layer_num: int):
         for param in self.backbone.parameters():
             param.requires_grad = True
@@ -157,7 +157,7 @@ class ClassifyModel(nn.Module):
 
         self.head.apply(self._init_weights)
 
-    # DeBERTaの重み初期化関数
+    # DeBERTa weight initialization function
     def _init_weights(self, module):
         if isinstance(module, nn.Linear):
             module.weight.data.normal_(mean=0.0, std=self.model_config.initializer_range)
@@ -180,12 +180,12 @@ class ClassifyModel(nn.Module):
         x = self.head(x)
         return x.squeeze(-1)
 
-    # 指定した層の数だけ再初期化する(エンコーダーの最後の層からカウント)
+    # Reinitialize the specified number of layers (counting from the last encoder layer)
     def reinit_layers(self, reinit_layer_num: int):
         for i in range(1, reinit_layer_num + 1):
             self.backbone.encoder.layer[-i].apply(self._init_weights)
 
-    # 指定した層の数だけFreezeする(エンコーダーの最初の層からカウント)
+    # Freeze the specified number of layers (counting from the first embedding layer)
     def freeze_layers(self, freeze_layer_num: int):
         for i in range(freeze_layer_num):
             if i == 0:
@@ -195,7 +195,7 @@ class ClassifyModel(nn.Module):
                 for params in self.backbone.encoder.layer[i - 1].parameters():
                     params.requires_grad = False
 
-    # 初期化した層以外の層をFreezeする
+    # Freeze all layers except the specified number of reinitialized layers
     def freeze_backbone(self, reinit_layer_num: int):
         for param in self.backbone.parameters():
             param.requires_grad = False
@@ -204,7 +204,7 @@ class ClassifyModel(nn.Module):
             for params in self.backbone.encoder.layer[-i].parameters():
                 params.requires_grad = True
 
-    # BackboneのFreezeを解除する, 元からFreezeに指定した層はFreezeのまま
+    # Unfreeze the backbone, keeping the originally frozen layers frozen
     def unfreeze_backbone(self, freeze_layer_num: int):
         for param in self.backbone.parameters():
             param.requires_grad = True

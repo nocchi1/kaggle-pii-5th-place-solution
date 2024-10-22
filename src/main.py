@@ -125,7 +125,7 @@ def main():
         Path(f).unlink()
 
     # Get Best Negative Threshold
-    truth_df = get_truth_df(config, oof_df["document"].unique().to_list(), convert_idx=False)
+    truth_df = get_truth_df(config, oof_df["document"].unique().to_list(), convert_idx=True)
     best_score, best_th = get_best_negative_threshold(config, oof_df, truth_df)
     message = f"Overall OOF Best Score: {best_score}, Best Negative Threshold: {best_th}"
     logger.info(message)

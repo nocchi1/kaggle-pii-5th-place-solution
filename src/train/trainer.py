@@ -11,9 +11,11 @@ from tqdm.auto import tqdm
 
 from src.train.component_factory import ComponentFactory
 from src.train.ema import ModelEmaV3
-from src.utils.competition_utils import get_char2org_df, get_char_pred_df, get_truth_df
-from src.utils.metric import get_best_negative_threshold
+from src.utils.competition_utils import get_char2org_df, get_char_pred_df, get_first_pred_df, get_truth_df
+from src.utils.metric import evaluate_metric, get_best_name_pred_threshold, get_best_negative_threshold
 from src.utils.utils import AverageMeter, clean_message
+
+__all__ = ["Trainer"]
 
 
 class Trainer:
@@ -41,6 +43,9 @@ class Trainer:
         self.optimizer = None
         self.scheduler = None
         self.grad_scaler = amp.GradScaler(enabled=config.amp)
+
+        self.truth_df = None
+        self.first_pred_df = None
 
     def train(
         self,
@@ -72,7 +77,7 @@ class Trainer:
             self.model_ema.update_after_step = 0
             best_score = retrain_best_score
 
-        # 学習ループの開始
+        # Start of the training loop
         epochs = self.config.epochs if not retrain else self.config.add_epochs
         for epoch in tqdm(range(epochs)):
             if full_train_complete:
@@ -81,7 +86,7 @@ class Trainer:
             self.model.train()
             self.train_loss.reset()
 
-            # 1epoch目はbackboneをfreezeする
+            # Freeze the backbone in the first epoch
             if epoch == 0 and not retrain:
                 self.model.freeze_backbone(self.config.reinit_layer_num)
             elif epoch == 1 and not retrain:
@@ -89,7 +94,7 @@ class Trainer:
 
             iterations = tqdm(train_loader, total=len(train_loader)) if self.detail_pbar else train_loader
             for data in iterations:
-                if full_train_complete:  # ループの上部でbreakする必要がある
+                if full_train_complete:  # Need to break at the top of the loop
                     break
 
                 _, loss = self.forward_step(self.model, data)
@@ -107,7 +112,6 @@ class Trainer:
                     if self.config.ema:
                         self.model_ema.update(self.model, update_steps)
 
-                    # backboneの学習が始まってからschedulerを適用
                     if epoch >= 1 or retrain:
                         if self.scheduler is None:
                             first_cycle_epochs = (
@@ -115,7 +119,7 @@ class Trainer:
                             )
                             total_steps = first_cycle_epochs * len(train_loader)
                             if not retrain:
-                                total_steps -= len(train_loader)  # 最初の1epoch分はstepしないから
+                                total_steps -= len(train_loader)
                             self.scheduler = ComponentFactory.get_scheduler(
                                 self.config, self.optimizer, total_steps=total_steps
                             )
@@ -140,7 +144,7 @@ class Trainer:
                         parameters,
                         self.config.output_path / f"model{self.save_suffix}_full.pth",
                     )
-                    full_train_complete = True  # ここでbreakすると何故かnotebook kernelが落ちる現象が発生する
+                    full_train_complete = True  # Breaking here causes the notebook kernel to crash for some reason
 
             message = f"""
                 [Train] :
@@ -170,11 +174,33 @@ class Trainer:
                     out, loss = self.forward_step(self.model_ema, data)
 
                 self.valid_loss.update(loss.item(), n=data[0].size(0))
-                preds.extend(F.softmax(out, dim=-1).cpu().numpy().tolist())
+                if self.config.task_type == "detect":
+                    preds.extend(F.softmax(out, dim=-1).cpu().numpy().tolist())
+                elif self.config.task_type == "classify":
+                    preds.extend(F.sigmoid(out).cpu().numpy().tolist())
 
         oof_df = self.get_oof_df(preds, valid_loader)
-        truth_df = get_truth_df(self.config, oof_df["document"].unique().to_list(), convert_idx=False)
-        score, best_th = get_best_negative_threshold(self.config, oof_df, truth_df)
+
+        if self.truth_df is None:
+            self.truth_df = get_truth_df(self.config, oof_df["document"].unique().to_list(), convert_idx=True)
+
+        if self.first_pred_df is None and self.config.task_type == "classify":
+            self.first_pred_df = get_first_pred_df(
+                self.config,
+                oof_file_path=self.config.output_path.parent / self.config.first_exp / "oof.parquet",
+                document_ids=oof_df["document"].unique().to_list(),
+                negative_th=self.config.first_negative_th,
+            )
+            first_score = evaluate_metric(self.first_pred_df, self.truth_df)
+            self.logger.info(f"First Training Score of Valid : {first_score:.5f}")
+
+        if self.config.task_type == "detect":
+            score, best_th = get_best_negative_threshold(self.config, oof_df, self.truth_df)
+        elif self.config.task_type == "classify":
+            pred_df = self.first_pred_df.join(
+                oof_df.rename({"pred_0": "name_pred"}), on=["document", "token_idx"], how="left", coalesce=True
+            )
+            score, best_th = get_best_name_pred_threshold(pred_df, self.truth_df)
 
         loss = self.valid_loss.avg
         message = f"""
@@ -188,14 +214,21 @@ class Trainer:
         return score, loss, oof_df
 
     def forward_step(self, model: nn.Module, data: torch.Tensor):
-        input_ids, attention_mask, positions_feats, labels = data
+        if self.config.task_type == "detect":
+            input_ids, attention_mask, positions_feats, labels = data
+            positions_feats = positions_feats.to(self.config.device)
+        elif self.config.task_type == "classify":
+            input_ids, attention_mask, labels = data
+
         input_ids = input_ids.to(self.config.device)
         attention_mask = attention_mask.to(self.config.device)
-        positions_feats = positions_feats.to(self.config.device)
         labels = labels.to(self.config.device)
 
         with amp.autocast(enabled=self.config.amp):
-            out = model(input_ids, attention_mask, positions_feats)
+            if self.config.task_type == "detect":
+                out = model(input_ids, attention_mask, positions_feats)
+            elif self.config.task_type == "classify":
+                out = model(input_ids, attention_mask)
             loss = self.loss_fn(out, labels)
         return out, loss
 

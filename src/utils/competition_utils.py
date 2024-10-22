@@ -2,6 +2,7 @@ import json
 import re
 import statistics
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import polars as pl
@@ -34,6 +35,18 @@ def convert_label_str2index(data: list[dict], remove_prefix: bool = False) -> li
         labels = data[i]["labels"]
         data[i]["labels"] = [target2idx[label] for label in labels]
     return data
+
+
+def visualize_pii_text(sample: dict[str, Any]):
+    """
+    Visualize PII in red
+    """
+    tokens, spaces, labels = sample["tokens"], sample["trailing_whitespace"], sample["labels"]
+    text = ""
+    for token, space, label in zip(tokens, spaces, labels):
+        text += f"\033[31m{token}\033[0m" if (label != "O" and label != 0) else token
+        text += " " if space else ""
+    print(text)
 
 
 def mapping_index_org2char(
@@ -145,7 +158,7 @@ def get_char_pred_df(
     class_num: int,
 ):
     """
-    文字単位に集約した予測値を取得する
+    Obtain the aggregated predictions on a per-character basis as a dataframe.
     """
     doc_ids, char_indices, char_preds = [], [], []
     for pred, doc_id, offset in zip(preds, overlap_doc_ids, offset_mappings):
@@ -179,7 +192,7 @@ def get_char2org_df(
     whitespaces: list[list[bool]],
 ):
     """
-    文字とオリジナルトークンのマッピングをdfとして取得する
+    Obtain the mapping of characters and original tokens as a dataframe.
     """
     char2org_df = []
     for doc_id, text, org_token, whitespace in zip(doc_ids, full_text, org_tokens, whitespaces):
@@ -210,7 +223,7 @@ def get_char2org_df(
 
 def get_pred_df(oof_df: pl.DataFrame, class_num: int, negative_th: float) -> pl.DataFrame:
     """
-    全クラスの確率のテーブルから、最も確率の高いクラスを予測として取得する
+    From the table of probabilities for all classes, obtain the most probable class as the prediction.
     """
     pred_df = oof_df.with_columns(
         positive_pred=pl.Series(
@@ -244,8 +257,8 @@ def get_pred_df_individual(
     oof_df: pl.DataFrame, class_num: int, negative_th_dict: dict[int, tuple[float, float]]
 ) -> pl.DataFrame:
     """
-    全クラスの確率のテーブルから、最も確率の高いクラスを予測として取得する
-    クラスごとに閾値を設定する
+    From the table of probabilities for all classes, obtain the most probable class as the prediction.
+    Set thresholds for each class.
     """
     pred_df = oof_df.with_columns(
         positive_pred=pl.Series(
@@ -287,7 +300,7 @@ def restore_prefix(config: DictConfig, pred_df: pl.DataFrame):
     """
     Restore Prefix, e.g. NAME_STUDENT -> B-NAME_STUDENT
     """
-    # まずスペースに対しての予測を"O"に変更する -> これをしないと精度が著しく下がる
+    # First, change predictions for spaces to "O" -> If don't do this, accuracy significantly decreases
     org_token_df = get_original_token_df(config, pred_df["document"].unique().to_list())
     pred_df = pred_df.join(org_token_df, on=["document", "token_idx"], how="left", coalesce=True)
     pred_df = pred_df.with_columns(
@@ -299,7 +312,7 @@ def restore_prefix(config: DictConfig, pred_df: pl.DataFrame):
     )
     pred_df = pred_df.drop(["token", "space"])
 
-    # B, Iタグを割り当てる
+    # Assign B and I tags
     pred_df = pred_df.with_columns(org_pred=pl.col("pred").replace(IDX2TARGET_WTO_BIO, default="O"))
     pred_df = pred_df.with_columns(pred_diff=pl.col("pred").diff().over(["document"]).fill_null(-1))
     pred_df = pred_df.with_columns(
@@ -324,7 +337,7 @@ def restore_prefix(config: DictConfig, pred_df: pl.DataFrame):
 
 def get_original_token_df(config: DictConfig, document_ids: list[int]) -> pl.DataFrame:
     """
-    オリジナルのデータに関するdfを取得する
+    Obtain a dataframe related to the original data.
 
     Returns:
         pl.DataFrame: [document, token_idx, token, space]
@@ -353,7 +366,7 @@ def get_original_token_df(config: DictConfig, document_ids: list[int]) -> pl.Dat
 
 def get_truth_df(config: DictConfig, document_ids: list[int], convert_idx: bool) -> pl.DataFrame:
     """
-    ラベルを元のトークンインデックスと共にデータフレームで取得
+    Obtain labels along with the original token indices as a dataframe.
 
     Returns:
         pl.DataFrame: [document, token_idx, label]
@@ -383,13 +396,13 @@ def get_truth_df(config: DictConfig, document_ids: list[int], convert_idx: bool)
 
 def get_first_pred_df(
     config: DictConfig,
-    oof_df: pl.DataFrame | None,
-    oof_file_path: Path | None,
-    document_ids: list[int] | None,
-    negative_th: float,
+    oof_df: pl.DataFrame | None = None,
+    oof_file_path: Path | None = None,
+    document_ids: list[int] | None = None,
+    negative_th: float = 0.50,
 ):
     """
-    1st stage(Detection)の予測確率からprefixありの予測結果を返す
+    Return predictions with prefixes from the predicted probabilities of the first stage (Detection).
     """
     assert oof_df is not None or oof_file_path is not None, "oof_df or oof_file_path must be given"
     if oof_df is None:
@@ -401,5 +414,5 @@ def get_first_pred_df(
     class_num = len(list(filter(lambda x: "pred" in x, oof_df.columns)))
     pred_df = get_pred_df(oof_df, class_num=class_num, negative_th=negative_th)
     if class_num == 8:
-        pred_df = restore_prefix(config, pred_df)  # input_pathの情報が必要なのでconfigを渡す
+        pred_df = restore_prefix(config, pred_df)  # Pass config because "input_path" info is required
     return pred_df

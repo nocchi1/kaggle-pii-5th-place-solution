@@ -1,4 +1,3 @@
-import gc
 import itertools
 import random
 from typing import Literal

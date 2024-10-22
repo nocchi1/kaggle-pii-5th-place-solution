@@ -3,6 +3,8 @@ import torch.nn.functional as F
 from omegaconf import DictConfig
 from torch import nn
 
+__all__ = ["MaskedBCELoss", "OnlineSmoothingCELoss", "SmoothingCELoss"]
+
 TARGET_PAIR_DICT = {
     0: None,
     1: 8,
@@ -88,7 +90,7 @@ class OnlineSmoothingCELoss(nn.Module):
         self.stats_matrix = torch.zeros((config.class_num, config.class_num), device=config.device)
         self.counter = torch.zeros(config.class_num, device=config.device)
 
-        # 最初は通常のLabel Smoothing
+        # Initially, use standard Label Smoothing
         self.soft_matrix = (
             torch.eye(config.class_num, device=config.device) * (1 - self.smooth_ratio)
             + self.smooth_ratio / config.class_num
@@ -123,7 +125,7 @@ class OnlineSmoothingCELoss(nn.Module):
                 hard_label = torch.eye(self.class_num, device=self.device)[i]
                 soft_matrix[i] = hard_label * self.alpha + (self.stats_matrix[i] / self.counter[i]) * (1 - self.alpha)
             else:
-                # soft_matrix[i] = torch.ones_like(soft_matrix[i]) / self.class_num # 論文の実装ではこちらが使われている
+                # soft_matrix[i] = torch.ones_like(soft_matrix[i]) / self.class_num # This is used in the original paper's implementation
                 soft_label = torch.eye(self.class_num, device=self.device)[i]
                 soft_label = soft_label * (1 - self.smooth_ratio) + self.smooth_ratio / self.class_num
                 soft_matrix[i] = soft_label

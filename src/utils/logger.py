@@ -5,7 +5,7 @@ from pathlib import Path
 def get_logger(log_dir: Path, stdout: bool = True):
     from loguru import logger
 
-    logger.remove()  # デフォルトの設定を削除
+    logger.remove()  # remove default configuration
     custom_format = "[ <green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level} ] {message}</level>"
     logger.add(
         log_dir / "log_{time:YYYY-MM-DD-HH-mm-ss}.txt",

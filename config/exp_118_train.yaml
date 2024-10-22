@@ -6,53 +6,35 @@ device: "cuda"
 seed: 10
 
 # data preprocess
-first_negative_th: 0.400 # [TODO]あとで調整
+first_negative_th: 0.350
 n_fold: 3
 use_fold: 3
 
 # dataset, dataloader
 add_newline_token: true
-max_length: 2048
-train_stride: 1024
-eval_stride: 1024
-train_batch: 2
-eval_batch: 4
+max_length: 1536
+train_stride: 768
+eval_stride: 768
+train_batch: 1
+eval_batch: 2
 
 # model
 model_path: "microsoft/deberta-v3-large"
 class_num: 1
-lstm_type: "none"
-use_hidden_states: 2
-dropout: 0.10
-hidden_dropout: 0.10
-attention_dropout: 0.10
-reinit_layer_num: 0
-freeze_layer_num: 0
 
 # loss
+smooth_type: "none"
+smooth_ratio: 0.05
+smooth_pair: 0.05
 positive_class_weight: 10
 
-# optimizer
-optimizer_type: "AdamW"
-pretrained_lr: 1e-6
-head_lr: 1e-4
-weight_decay: 0.01
-betas: [0.9, 0.999]
-
 # scheduler
-scheduler_type: "cosine_custom"
 first_cycle_epochs: 4
-cycle_factor: 1
-num_warmup_steps: 0
-min_lr: 1e-9
-gamma: 1.0
 
 # training
 epochs: 4
-accumulation_steps: 8
+accumulation_steps: 16
 eval_steps: 1000
-# negative_th: 0.660
-# negative_th_method: "overall"
 amp: true
 ema: true
 ema_decay: 0.999

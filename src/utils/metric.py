@@ -50,8 +50,10 @@ def get_best_negative_threshold(
 
 def get_best_negative_threshold_individual(
     config: DictConfig, oof_df: pl.DataFrame, truth_df: pl.DataFrame, stride: float = 0.025
-):  # ここのpii_typeごとのthresholdを返す
-    # 最も確率の高いpositiveクラスを算出
+):
+    """
+    Return thresholds for each pii_type
+    """
     pred_df = oof_df.with_columns(
         positive_pred=(
             pl.Series(
@@ -101,52 +103,51 @@ def get_best_negative_threshold_individual(
     return best_th_dict
 
 
-# def get_best_threshold_2nd(config, pred_df: pl.DataFrame):
-#     truth_df = get_truth_df(config, pred_df["document"].unique().to_list(), is_label_idx=True)
-#     best_score = 0
-#     lower_th, upper_th = 0.000, 0.601
-#     for th in np.arange(lower_th, upper_th, 0.005):
-#         pred_df = pred_df.with_columns(
-#             pred=(
-#                 pl.when(
-#                     (pl.col("pred_first").is_in([1, 8]))
-#                     & (pl.col("pred_name") <= th)
-#                     & (pl.col("pred_name").is_not_null())
-#                 )
-#                 .then(0)
-#                 .otherwise(pl.col("pred_first"))
-#             )
-#         )
-#         score = evaluate_metric(pred_df, truth_df)
-#         if score > best_score:
-#             best_score = score
-#             best_th = th
-#     return best_score, best_th
+def get_best_name_pred_threshold(pred_df: pl.DataFrame, truth_df: pl.DataFrame, stride: float = 0.025):
+    """
+    Search for the threshold in the 2nd stage (classification)
+    args:
+        pred_df(pl.DataFrame): [document, token_idx, detect_prob, detect_pred, name_pred]
+    """
+    best_score = evaluate_metric(pred_df, truth_df)
+    best_th = None
+
+    pred_df = pred_df.with_columns(org_pred=pl.col("pred"))
+    min_th, max_th = 0.10, 0.90
+    for th in np.arange(min_th, max_th, stride):
+        pred_df = pred_df.with_columns(
+            pred=pl.when((pl.col("org_pred").is_in([1, 8])) & (pl.col("name_pred") < th))
+            .then(0)
+            .otherwise(pl.col("pred"))
+        )
+        score = evaluate_metric(pred_df, truth_df)
+        if score > best_score:
+            best_score = score
+            best_th = th
+    return best_score, best_th
 
 
-# def check_data_validity_2nd(train_data: list[dict], use_fn_label: bool):
-#     """
-#     2ndステージのラベルにおいて、labels, name_predsの関係からsecond_labelsが正しく作成できているのかを確認
-#     TP, FP, FNの数も同時に確認する
-#     """
-#     tp, fp, fn = 0, 0, 0
-#     for data in train_data:
-#         assert len(data["labels"]) == len(data["name_preds"])
-#         assert len(data["labels"]) == len(data["second_labels"])
+def check_label_validity_for_2nd(data: list[dict]):
+    """
+    Verify that second_labels are correctly created based on the relationship
+    between "labels" and "name_pred" in the 2nd stage (classification)
+    Additionally, check the counts of TP, FP, and FN
+    """
+    tp, fp, fn = 0, 0, 0
+    for d in data:
+        assert len(d["labels"]) == len(d["name_pred"])
+        assert len(d["labels"]) == len(d["second_labels"])
 
-#         for label, pred, second_label in zip(data["labels"], data["name_preds"], data["second_labels"]):
-#             if pred == 1 and label in [1, 8]:
-#                 tp += 1
-#                 assert second_label == 1
-#             elif pred == 1 and label not in [1, 8]:
-#                 fp += 1
-#                 assert second_label == 0
-#             elif pred == 0 and label in [1, 8]:
-#                 fn += 1
-#                 if use_fn_label:
-#                     assert second_label == 1
-#                 else:
-#                     assert second_label == -1
-#             else:
-#                 assert second_label == -1
-#     return tp, fp, fn
+        for label, sec_label, pred in zip(d["labels"], d["second_labels"], d["name_pred"]):
+            if pred == 1 and label in [1, 8]:
+                assert sec_label == 1
+                tp += 1
+            elif pred == 1 and label not in [1, 8]:
+                assert sec_label == 0
+                fp += 1
+            elif pred == 0 and label in [1, 8]:
+                fn += 1
+                assert sec_label == 1
+            else:
+                assert sec_label == -1
+    return tp, fp, fn
