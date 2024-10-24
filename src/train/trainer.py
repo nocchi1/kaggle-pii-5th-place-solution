@@ -137,6 +137,8 @@ class Trainer:
                             self.config.output_path / f"model{self.save_suffix}_best.pth",
                         )
                     self.model.train()
+                    if self.config.smooth_type == "online":
+                        self.loss_fn.train_mode = True
 
                 if full_train and global_steps == full_steps:
                     parameters = self.model_ema.module.state_dict() if self.config.ema else self.model.state_dict()
@@ -164,6 +166,9 @@ class Trainer:
             self.model.load_state_dict(torch.load(self.config.output_path / f"model{self.save_suffix}_best.pth"))
 
         self.model.eval()
+        if self.config.smooth_type == "online":
+            self.loss_fn.train_mode = False
+
         preds = []
         with torch.no_grad():
             iterations = tqdm(valid_loader, total=len(valid_loader)) if self.detail_pbar else valid_loader

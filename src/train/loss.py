@@ -87,6 +87,7 @@ class OnlineSmoothingCELoss(nn.Module):
         self.alpha = alpha
         self.smooth_ratio = config.smooth_ratio
 
+        self.train_mode = True
         self.stats_matrix = torch.zeros((config.class_num, config.class_num), device=config.device)
         self.counter = torch.zeros(config.class_num, device=config.device)
 
@@ -99,7 +100,8 @@ class OnlineSmoothingCELoss(nn.Module):
     def forward(self, y_pred: torch.Tensor, y_true: torch.Tensor):
         y_pred = y_pred.view(-1, y_pred.size(-1))
         y_true = y_true.view(-1)
-        self.accumulate_model_output(y_pred, y_true)
+        if self.train_mode:
+            self.accumulate_model_output(y_pred, y_true)
 
         valid_idx = y_true != -1
         y_pred = y_pred[valid_idx]
