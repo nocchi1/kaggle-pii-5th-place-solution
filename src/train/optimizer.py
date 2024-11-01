@@ -10,7 +10,7 @@ def get_optimizer(
     weight_decay: float = 0.01,
     betas: tuple[float, float] = (0.9, 0.999),
 ):
-    no_weight_decay = ["bias", "LayerNorm.weight"]
+    no_weight_decay = ["bias", "layer_norm"]
     parameters = []
     for name, params in model.named_parameters():
         if "backbone" in name:
