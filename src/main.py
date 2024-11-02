@@ -21,14 +21,8 @@ from src.utils.competition_utils import get_pred_df, get_truth_df
 from src.utils.metric import evaluate_metric, get_best_negative_threshold
 
 
-def main():
+def main(args):
     # Setup
-    parser = argparse.ArgumentParser(description="")
-    parser.add_argument("-c", "--config_name", help="config file name", type=str, required=True)
-    parser.add_argument("-d", "--debug", help="debug mode", action="store_true")
-    args = parser.parse_args()
-
-    warnings.filterwarnings("ignore")
     config = get_config(args.config_name, config_dir=Path("./config"))
     config.debug = args.debug
     logger = get_logger(config.output_path)
@@ -195,4 +189,10 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="")
+    parser.add_argument("-c", "--config_name", help="config file name", type=str, required=True)
+    parser.add_argument("-d", "--debug", help="debug mode", action="store_true")
+    args = parser.parse_args()
+    warnings.filterwarnings("ignore")
+    
+    main(args)
